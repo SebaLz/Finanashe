@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState, useEffect } from 'react';
-import { Edit2, Save, Check, AlertCircle, Loader2, Plus, Trash2, ArrowRight, Filter, Settings, ToggleLeft, ToggleRight, Receipt, Power, PowerOff } from 'lucide-react';
+import { Edit2, Save, Check, AlertCircle, Loader2, Plus, Trash2, ArrowRight, Filter, Settings, ToggleLeft, ToggleRight, Receipt, Power, PowerOff, X } from 'lucide-react';
 import { getBudgetSummary, createBudget, updateBudget, deleteBudget, BudgetWithCategory, BudgetWithFixedExpenses, getDetailedBudget, updateBudgetFixedExpenseSetting } from '@/services/budgets';
 import { getCategories, createCategory, deleteCategory, updateCategory, setCategoryVisibility, createCustomCategory } from '@/services/categories';
 import { useUser } from '@/hooks/useUser';
 import { Select, SelectOption } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { checkTransactionsTable } from '@/services/transactions';
+import { checkTransactionsTable, getTransactions } from '@/services/transactions';
 import { getFixedExpensesByCategory, FixedExpenseWithCategory } from '@/services/fixed-expenses';
 import { Modal } from '@/components/ui/modal';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +96,48 @@ export default function PresupuestoPage() {
     
     checkTables();
   }, [user]);
+
+  const [totalPercentage, setTotalPercentage] = useState(0);
+
+  // Calcular porcentaje total cuando cambian los presupuestos
+  useEffect(() => {
+    const total = presupuestos.reduce((sum, p) => sum + (p.percentage || 0), 0);
+    setTotalPercentage(Math.round(total * 100) / 100);
+  }, [presupuestos]);
+
+  // Sincronizar con el sueldo mensual
+  useEffect(() => {
+    const sincronizarConSueldo = async () => {
+      if (!user) return;
+      
+      try {
+        // Obtener transacciones del mes actual
+        const transaccionesData = await getTransactions(user.id, selectedMonth);
+        
+        // Encontrar el sueldo (transacción de tipo ingreso con categoría "Sueldo")
+        const sueldo = transaccionesData.find(t => 
+          t.type === 'income' && 
+          t.categories?.name.toLowerCase() === 'sueldo'
+        );
+        
+        if (sueldo && !editMode) {
+          setPresupuestoTotal(sueldo.amount);
+          
+          // Actualizar montos basados en porcentajes
+          const actualizados = presupuestos.map(p => ({
+            ...p,
+            amount: Math.round((p.percentage / 100) * sueldo.amount)
+          }));
+          
+          setPresupuestos(actualizados);
+        }
+      } catch (error) {
+        console.error('Error sincronizando con sueldo:', error);
+      }
+    };
+    
+    sincronizarConSueldo();
+  }, [user, selectedMonth, editMode]);
 
   async function loadData() {
     if (!user) return;
@@ -707,6 +749,16 @@ export default function PresupuestoPage() {
                     </p>
                   </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                    {editMode && (
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelEdit}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Cancelar
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -719,7 +771,7 @@ export default function PresupuestoPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => router.push('/gastos-fijos')}
-                      className="text-xs w-full sm:w-auto justify-center flex items-center gap-1"
+                      className="text-xs w-full sm:w-auto justify-center flex items-center gap-1 bg-white dark:bg-gray-800"
                     >
                       Gestionar Gastos Fijos
                       <ArrowRight size={14} />
@@ -728,19 +780,44 @@ export default function PresupuestoPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center">
-                  <span className="text-3xl font-bold mr-2">$</span>
-                  {editMode ? (
-                    <Input
-                      type="number"
-                      value={presupuestoTotal}
-                      onChange={handleChangePresupuestoTotal}
-                      className="text-3xl font-bold border-0 p-0 h-auto focus-visible:ring-0"
-                      min="0"
-                      step="1000"
-                    />
-                  ) : (
-                    <span className="text-3xl font-bold">{presupuestoTotal.toLocaleString()}</span>
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <span className="text-3xl font-bold mr-2">$</span>
+                    {editMode ? (
+                      <Input
+                        type="number"
+                        value={presupuestoTotal}
+                        onChange={handleChangePresupuestoTotal}
+                        className="text-3xl font-bold border-0 p-0 h-auto focus-visible:ring-0"
+                        min="0"
+                        step="1000"
+                      />
+                    ) : (
+                      <span className="text-3xl font-bold">{presupuestoTotal.toLocaleString()}</span>
+                    )}
+                  </div>
+                  
+                  {editMode && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span>Distribución del presupuesto</span>
+                        <span className={`font-medium ${
+                          totalPercentage === 100 ? 'text-green-600' :
+                          totalPercentage > 100 ? 'text-red-600' : 'text-yellow-600'
+                        }`}>
+                          {totalPercentage}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full dark:bg-gray-700">
+                        <div 
+                          className={`h-2 rounded-full transition-all ${
+                            totalPercentage === 100 ? 'bg-green-600' :
+                            totalPercentage > 100 ? 'bg-red-600' : 'bg-yellow-600'
+                          }`}
+                          style={{ width: `${Math.min(totalPercentage, 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -820,88 +897,102 @@ export default function PresupuestoPage() {
 
             {/* Budget Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {presupuestos.map((presupuesto) => (
-                <Card key={presupuesto.id} className="shadow-sm hover:shadow-md transition-shadow duration-200">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <div 
-                          className="w-4 h-4 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: presupuesto.category.color }}
-                        />
-                        {presupuesto.category.name}
-                      </CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 flex items-center justify-center -mt-1"
-                        onClick={() => handleOpenFixedExpensesModal(presupuesto)}
-                        title="Gestionar gastos fijos"
-                        disabled={editMode}
-                      >
-                        <Settings size={16} className="mr-1" />
-                        <span className="text-xs">Personalizar</span>
-                      </Button>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <span className="text-sm text-muted-foreground">Asignado</span>
-                          <p className="font-medium text-lg">${presupuesto.amount.toLocaleString()}</p>
-                        </div>
-                        
-                        {presupuesto.fixed_expenses_amount > 0 && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm text-muted-foreground">Gastos fijos</span>
-                              <Badge variant="outline" className="text-xs">
-                                Recurrentes
-                              </Badge>
+              {presupuestos.map((presupuesto) => {
+                const categoria = categories.find(c => c.id === presupuesto.category_id);
+                // Calcular el total gastado (gastos variables + fijos)
+                const totalGastado = (presupuesto.spent ?? 0) + (presupuesto.fixed_expenses_amount ?? 0);
+                const porcentajeGastado = (totalGastado / (presupuesto.amount ?? 1)) * 100;
+                
+                return (
+                  <Card key={presupuesto.id} className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                          <CardTitle className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: categoria?.color || '#3B82F6' }} 
+                            />
+                            {categoria?.name || 'Sin categoría'}
+                          </CardTitle>
+                          {editMode && (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                value={presupuesto.percentage}
+                                onChange={(e) => handleChangePorcentaje(presupuesto.id, parseFloat(e.target.value))}
+                                className="w-20 h-8 text-sm"
+                                min="0"
+                                max="100"
+                                step="1"
+                              />
+                              <span className="text-sm text-muted-foreground">%</span>
                             </div>
-                            <p className="font-medium text-lg text-amber-600">
-                              -${presupuesto.fixed_expenses_amount.toLocaleString()}
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <span className="text-sm text-muted-foreground">Asignado</span>
+                            <p className="font-medium text-lg">${(presupuesto.amount ?? 0).toLocaleString()}</p>
+                          </div>
+                          
+                          {presupuesto.fixed_expenses_amount > 0 && (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm text-muted-foreground">Gastos fijos</span>
+                                <Badge variant="outline" className="text-xs">
+                                  Recurrentes
+                                </Badge>
+                              </div>
+                              <p className="font-medium text-lg text-amber-600">
+                                -${(presupuesto.fixed_expenses_amount ?? 0).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                          
+                          <div className="space-y-1.5">
+                            <span className="text-sm text-muted-foreground">Disponible</span>
+                            <p className="font-medium text-lg">${(presupuesto.available_amount ?? 0).toLocaleString()}</p>
+                          </div>
+                          
+                          <div className="space-y-1.5 flex flex-col justify-center">
+                            <span className="text-sm text-muted-foreground">Gastado</span>
+                            <p className="font-medium text-lg text-right text-red-600 flex items-center h-full">
+                              ${totalGastado.toLocaleString()}
                             </p>
                           </div>
-                        )}
-                        
-                        <div className="space-y-1.5">
-                          <span className="text-sm text-muted-foreground">Disponible</span>
-                          <p className="font-medium text-lg">${presupuesto.available_amount.toLocaleString()}</p>
                         </div>
-                        
-                        <div className="space-y-1.5">
-                          <span className="text-sm text-muted-foreground">Gastado</span>
-                          <p className="font-medium text-lg">
-                            ${presupuesto.spent.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Restante</span>
-                          <span className={`font-medium text-lg ${presupuesto.isExceeded ? 'text-red-500' : ''}`}>
-                            ${presupuesto.remaining.toLocaleString()}
-                          </span>
-                        </div>
-                        
-                        <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                          <div 
-                            className={`h-full transition-all duration-300 ${
-                              presupuesto.isExceeded ? 'bg-red-500' : 
-                              presupuesto.spentPercentage > 80 ? 'bg-amber-500' : 'bg-primary'
-                            }`}
-                            style={{ width: `${Math.min(presupuesto.spentPercentage || 0, 100)}%` }}
-                          />
+
+                        {/* Barra de progreso */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Progreso</span>
+                            <span className={`font-medium ${
+                              porcentajeGastado > 100 ? 'text-red-600' :
+                              porcentajeGastado >= 80 ? 'text-amber-600' : 'text-green-600'
+                            }`}>
+                              {Math.round(porcentajeGastado)}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded-full dark:bg-gray-700">
+                            <div 
+                              className={`h-2 rounded-full transition-all ${
+                                porcentajeGastado > 100 ? 'bg-red-600' :
+                                porcentajeGastado >= 80 ? 'bg-amber-600' : 'bg-green-600'
+                              }`}
+                              style={{ width: `${Math.min(porcentajeGastado, 100)}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </>
         )}

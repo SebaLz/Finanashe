@@ -164,11 +164,13 @@ export default function TransaccionesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div className="relative w-full sm:w-96">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  <div className="relative flex-1 max-w-md w-full">
+                    <div className="absolute left-0 top-0 pl-3 flex items-center pointer-events-none" style={{ height: '75%' }}>
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
                     <Input 
                       placeholder="Buscar transacciones..." 
-                      className="pl-10"
+                      className="pl-10 w-full h-12"
                       value={busqueda}
                       onChange={(e) => setBusqueda(e.target.value)}
                     />
@@ -176,7 +178,7 @@ export default function TransaccionesPage() {
                   <div className="flex items-center space-x-2 w-full sm:w-auto">
                     <Filter size={20} className="text-gray-500" />
                     <select 
-                      className="p-2 border rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800"
+                      className="p-2 border rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 w-full sm:w-auto"
                       value={filtro}
                       onChange={(e) => setFiltro(e.target.value)}
                     >
