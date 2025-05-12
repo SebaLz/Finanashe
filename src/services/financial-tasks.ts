@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
-import { FixedExpenseWithCategory } from './fixed-expenses';
+import { FixedExpenseWithCategory, incrementPaidInstallments } from './fixed-expenses';
 import { addDays, format, getDate, getDay, getMonth, isAfter, isSameMonth } from 'date-fns';
 
 export type FinancialTask = {
@@ -12,7 +12,9 @@ export type FinancialTask = {
   due_date: string;
   status: 'pending' | 'paid';
   payment_date: string | null;
-  comments?: string | null;
+  description: string | null;
+  is_installment: boolean;
+  installment_number: number | null;
   created_at?: string;
 };
 
@@ -20,9 +22,7 @@ export type FinancialTaskWithDetails = FinancialTask & {
   fixed_expense?: FixedExpenseWithCategory;
 };
 
-export type FinancialTaskInput = Omit<FinancialTask, 'id' | 'created_at'> & {
-  comments?: string | null;
-};
+export type FinancialTaskInput = Omit<FinancialTask, 'id' | 'created_at'>;
 
 export async function getFinancialTasks(userId: string, month: string): Promise<FinancialTaskWithDetails[]> {
   try {
@@ -198,89 +198,206 @@ export async function getFinancialTaskById(id: string) {
 }
 
 export async function createFinancialTask(task: FinancialTaskInput) {
-  const { data, error } = await supabase
-    .from('financial_tasks')
-    .insert({
-      ...task,
-      id: uuidv4(),
-      comments: task.comments || null,
-      created_at: new Date().toISOString(),
-    })
-    .select();
+  try {
+    // Validar que los campos requeridos estén presentes
+    if (!task.user_id || !task.title || !task.amount || !task.due_date) {
+      throw new Error('Faltan campos requeridos para crear la tarea financiera');
+    }
 
-  if (error) {
-    console.error('Error creating financial task:', error);
-    throw new Error('No se pudo crear la tarea financiera');
+    const { data, error } = await supabase
+      .from('financial_tasks')
+      .insert({
+        ...task,
+        id: uuidv4(),
+        status: task.status || 'pending',
+        is_installment: task.is_installment || false,
+        created_at: new Date().toISOString()
+      })
+      .select();
+
+    if (error) {
+      console.error('Error creating financial task:', error);
+      throw new Error('No se pudo crear la tarea financiera');
+    }
+
+    return data[0] as FinancialTask;
+  } catch (error) {
+    console.error('Error in createFinancialTask:', error);
+    throw error;
   }
-
-  return data[0] as FinancialTask;
 }
 
 export async function updateFinancialTask(id: string, task: Partial<FinancialTaskInput>) {
-  const { data, error } = await supabase
-    .from('financial_tasks')
-    .update(task)
-    .eq('id', id)
-    .select();
+  try {
+    const { data, error } = await supabase
+      .from('financial_tasks')
+      .update(task)
+      .eq('id', id)
+      .select();
 
-  if (error) {
-    console.error('Error updating financial task:', error);
-    throw new Error('No se pudo actualizar la tarea financiera');
+    if (error) {
+      console.error('Error updating financial task:', error);
+      throw new Error('No se pudo actualizar la tarea financiera');
+    }
+
+    return data[0] as FinancialTask;
+  } catch (error) {
+    console.error('Error in updateFinancialTask:', error);
+    throw error;
   }
-
-  return data[0] as FinancialTask;
 }
 
 export async function deleteFinancialTask(id: string) {
-  const { error } = await supabase
-    .from('financial_tasks')
-    .delete()
-    .eq('id', id);
+  try {
+    const { error } = await supabase
+      .from('financial_tasks')
+      .delete()
+      .eq('id', id);
 
-  if (error) {
-    console.error('Error deleting financial task:', error);
-    throw new Error('No se pudo eliminar la tarea financiera');
+    if (error) {
+      console.error('Error deleting financial task:', error);
+      throw new Error('No se pudo eliminar la tarea financiera');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in deleteFinancialTask:', error);
+    throw error;
   }
-
-  return true;
 }
 
 export async function markTaskAsPaid(id: string, paymentDate: Date = new Date()) {
-  const formattedPaymentDate = format(paymentDate, 'yyyy-MM-dd');
-  
-  const { data, error } = await supabase
-    .from('financial_tasks')
-    .update({
-      status: 'paid',
-      payment_date: formattedPaymentDate
-    })
-    .eq('id', id)
-    .select();
+  try {
+    // Usar la función RPC para marcar como pagada y actualizar cuotas si es necesario
+    const { data, error } = await supabase
+      .rpc('mark_task_as_paid', {
+        p_task_id: id,
+        p_payment_date: format(paymentDate, 'yyyy-MM-dd')
+      });
 
-  if (error) {
-    console.error('Error marking task as paid:', error);
-    throw new Error('No se pudo marcar la tarea como pagada');
+    if (error) {
+      console.error('Error marking task as paid with RPC:', error);
+
+      // Método alternativo si la RPC falla
+      // 1. Obtener la tarea para ver si está asociada a un gasto fijo por cuotas
+      const { data: task, error: taskError } = await supabase
+        .from('financial_tasks')
+        .select('fixed_expense_id, is_installment, installment_number')
+        .eq('id', id)
+        .single();
+
+      if (taskError) {
+        console.error('Error fetching task details:', taskError);
+        throw new Error('No se pudo obtener información de la tarea');
+      }
+
+      // 2. Actualizar la tarea como pagada
+      const { data: updatedTask, error: updateError } = await supabase
+        .from('financial_tasks')
+        .update({
+          status: 'paid',
+          payment_date: format(paymentDate, 'yyyy-MM-dd')
+        })
+        .eq('id', id)
+        .select();
+
+      if (updateError) {
+        console.error('Error updating task status:', updateError);
+        throw new Error('No se pudo marcar la tarea como pagada');
+      }
+
+      // 3. Si es una cuota, actualizar el contador de cuotas pagadas
+      if (task.fixed_expense_id && task.is_installment && task.installment_number) {
+        try {
+          await incrementPaidInstallments(task.fixed_expense_id);
+        } catch (installmentError) {
+          console.error('Error updating installment count:', installmentError);
+          // No lanzar error ya que la tarea principal se realizó
+        }
+      }
+
+      return updatedTask[0] as FinancialTask;
+    }
+
+    return data as FinancialTask;
+  } catch (error) {
+    console.error('Error in markTaskAsPaid:', error);
+    throw error;
   }
-
-  return data[0] as FinancialTask;
 }
 
 export async function markTaskAsPending(id: string) {
-  const { data, error } = await supabase
-    .from('financial_tasks')
-    .update({
-      status: 'pending',
-      payment_date: null
-    })
-    .eq('id', id)
-    .select();
+  try {
+    // 1. Obtener la tarea para ver si es una cuota
+    const { data: task, error: taskError } = await supabase
+      .from('financial_tasks')
+      .select('fixed_expense_id, is_installment, installment_number, status')
+      .eq('id', id)
+      .single();
 
-  if (error) {
-    console.error('Error marking task as pending:', error);
-    throw new Error('No se pudo marcar la tarea como pendiente');
+    if (taskError) {
+      console.error('Error fetching task details:', taskError);
+      throw new Error('No se pudo obtener información de la tarea');
+    }
+
+    // Si ya está pendiente, no hacer nada
+    if (task.status === 'pending') {
+      return task as FinancialTask;
+    }
+
+    // 2. Actualizar la tarea como pendiente
+    const { data, error } = await supabase
+      .from('financial_tasks')
+      .update({
+        status: 'pending',
+        payment_date: null
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Error marking task as pending:', error);
+      throw new Error('No se pudo marcar la tarea como pendiente');
+    }
+
+    // 3. Si es una cuota, actualizar el contador de cuotas pagadas del gasto fijo
+    if (task.fixed_expense_id && task.is_installment && task.installment_number) {
+      // Primero obtener el progreso actual de cuotas
+      const { data: fixedExpense, error: fixedExpenseError } = await supabase
+        .from('fixed_expenses')
+        .select('paid_installments')
+        .eq('id', task.fixed_expense_id)
+        .single();
+
+      if (fixedExpenseError) {
+        console.error('Error fetching fixed expense:', fixedExpenseError);
+        // Continuar ya que la tarea principal se realizó
+      } else if (fixedExpense && fixedExpense.paid_installments > 0) {
+        // Decrementar el contador de cuotas pagadas
+        try {
+          const { error: updateError } = await supabase
+            .from('fixed_expenses')
+            .update({
+              paid_installments: fixedExpense.paid_installments - 1
+            })
+            .eq('id', task.fixed_expense_id);
+
+          if (updateError) {
+            console.error('Error updating installment count:', updateError);
+            // No lanzar error ya que la tarea principal se realizó
+          }
+        } catch (installmentError) {
+          console.error('Error updating installment count:', installmentError);
+          // No lanzar error ya que la tarea principal se realizó
+        }
+      }
+    }
+
+    return data[0] as FinancialTask;
+  } catch (error) {
+    console.error('Error in markTaskAsPending:', error);
+    throw error;
   }
-
-  return data[0] as FinancialTask;
 }
 
 export async function getUpcomingTasks(userId: string, daysAhead: number = 7) {
@@ -288,85 +405,73 @@ export async function getUpcomingTasks(userId: string, daysAhead: number = 7) {
     const today = new Date();
     const endDate = addDays(today, daysAhead);
     
-    // Obtener tareas financieras pendientes
+    // Formatear fechas para consulta
+    const startDateStr = format(today, 'yyyy-MM-dd');
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    // Obtener tareas para el período solicitado
     const { data: tasks, error: tasksError } = await supabase
       .from('financial_tasks')
       .select('*')
       .eq('user_id', userId)
       .eq('status', 'pending')
-      .order('due_date');
-
+      .gte('due_date', startDateStr)
+      .lte('due_date', endDateStr)
+      .order('due_date', { ascending: true });
+      
     if (tasksError) {
       console.error('Error fetching upcoming tasks:', tasksError);
-      throw new Error('No se pudieron cargar las próximas tareas');
+      throw new Error('No se pudieron cargar las tareas próximas');
     }
-
-    // Filtrar tareas que vencen dentro del rango especificado
-    const filteredTasks = tasks ? tasks.filter(task => {
-      const dueDate = new Date(task.due_date);
-      return dueDate <= endDate && dueDate >= today;
-    }) : [];
-
-    if (filteredTasks.length === 0) {
+    
+    if (!tasks || tasks.length === 0) {
       return [];
     }
-
-    // Obtener todos los gastos fijos asociados a estas tareas
-    const fixedExpenseIds = filteredTasks
+    
+    // Obtener los gastos fijos asociados
+    const fixedExpenseIds = tasks
       .map(task => task.fixed_expense_id)
       .filter(id => id !== null) as string[];
-
-    let fixedExpensesMap = new Map();
-    
-    if (fixedExpenseIds.length > 0) {
-      // Obtener los gastos fijos
-      const { data: fixedExpenses, error: fixedExpensesError } = await supabase
-        .from('fixed_expenses')
-        .select('*')
-        .in('id', fixedExpenseIds);
-
-      if (fixedExpensesError) {
-        console.error('Error fetching fixed expenses for upcoming tasks:', fixedExpensesError);
-      } else if (fixedExpenses && fixedExpenses.length > 0) {
-        // Obtener las categorías para estos gastos fijos
-        const categoryIds = [...new Set(fixedExpenses.map(fe => fe.category_id))];
-        
-        const { data: categories, error: categoriesError } = await supabase
-          .from('all_categories')
-          .select('id, name, color, icon, is_system')
-          .in('id', categoryIds);
-
-        if (categoriesError) {
-          console.error('Error fetching categories for fixed expenses:', categoriesError);
-        } else {
-          // Crear un mapa de categorías
-          const categoryMap = new Map();
-          if (categories) {
-            categories.forEach(category => {
-              categoryMap.set(category.id, category);
-            });
-          }
-
-          // Añadir las categorías a los gastos fijos y crear el mapa
-          fixedExpenses.forEach(expense => {
-            fixedExpensesMap.set(expense.id, {
-              ...expense,
-              category: categoryMap.get(expense.category_id) || null
-            });
-          });
-        }
-      }
+      
+    if (fixedExpenseIds.length === 0) {
+      return tasks;
     }
-
-    // Asignar los gastos fijos a las tareas
-    const tasksWithDetails = filteredTasks.map(task => {
-      return {
-        ...task,
-        fixed_expense: task.fixed_expense_id ? fixedExpensesMap.get(task.fixed_expense_id) : null
-      };
+    
+    // Obtener información de gastos fijos
+    const { data: fixedExpenses, error: fixedExpensesError } = await supabase
+      .from('fixed_expenses')
+      .select(`
+        *,
+        category:category_id (
+          id, name, color, icon, is_system
+        )
+      `)
+      .in('id', fixedExpenseIds);
+      
+    if (fixedExpensesError) {
+      console.error('Error fetching fixed expenses for upcoming tasks:', fixedExpensesError);
+      // Devolver tareas sin info de gastos fijos
+      return tasks;
+    }
+    
+    // Crear mapa de gastos fijos para acceso rápido
+    const fixedExpenseMap = new Map();
+    fixedExpenses.forEach(expense => {
+      fixedExpenseMap.set(expense.id, expense);
     });
-
-    return tasksWithDetails as FinancialTaskWithDetails[];
+    
+    // Enriquecer las tareas con info de gastos fijos
+    const enrichedTasks = tasks.map(task => {
+      if (task.fixed_expense_id && fixedExpenseMap.has(task.fixed_expense_id)) {
+        return {
+          ...task,
+          fixed_expense: fixedExpenseMap.get(task.fixed_expense_id)
+        };
+      }
+      return task;
+    });
+    
+    return enrichedTasks;
   } catch (error) {
     console.error('Error in getUpcomingTasks:', error);
     return [];
@@ -375,101 +480,22 @@ export async function getUpcomingTasks(userId: string, daysAhead: number = 7) {
 
 export async function generateTasksFromFixedExpenses(userId: string, month: string) {
   try {
-    // Primero, obtenemos todos los gastos fijos activos
-    const { data: fixedExpenses, error } = await supabase
-      .from('fixed_expenses')
-      .select(`
-        *,
-        category:all_categories(name, color, icon, is_system)
-      `)
-      .eq('user_id', userId)
-      .eq('active', true);
+    // Usar la RPC para generar tareas
+    const { data, error } = await supabase
+      .rpc('generate_tasks_from_fixed_expenses', {
+        p_user_id: userId,
+        p_month: month
+      });
 
     if (error) {
-      console.error('Error fetching fixed expenses for task generation:', error);
-      throw new Error('No se pudieron cargar los gastos fijos');
+      console.error('Error generating tasks from fixed expenses:', error);
+      throw new Error('No se pudieron generar las tareas desde los gastos fijos');
     }
 
-    // Parsear el mes (formato YYYY-MM)
-    const [year, monthNum] = month.split('-');
-    const firstDayOfMonth = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-    const lastDayOfMonth = new Date(parseInt(year), parseInt(monthNum), 0);
-    
-    // Array para almacenar las tareas creadas
-    const createdTasks: FinancialTask[] = [];
-
-    // Para cada gasto fijo, generamos su tarea correspondiente
-    for (const expense of fixedExpenses) {
-      // Dependiendo de la frecuencia, calculamos las fechas de vencimiento
-      let dueDates: Date[] = [];
-
-      if (expense.frequency === 'monthly') {
-        // Para frecuencia mensual, usamos el día específico del mes
-        const day = Math.min(expense.due_date, lastDayOfMonth.getDate());
-        const dueDate = new Date(parseInt(year), parseInt(monthNum) - 1, day);
-        dueDates.push(dueDate);
-      } else if (expense.frequency === 'weekly') {
-        // Para frecuencia semanal, encontramos todos los días que coinciden
-        // con el día de la semana especificado
-        let currentDate = new Date(firstDayOfMonth);
-        while (currentDate <= lastDayOfMonth) {
-          if (getDay(currentDate) === expense.due_date % 7) { // 0 = domingo, 1 = lunes, etc.
-            dueDates.push(new Date(currentDate));
-          }
-          currentDate = addDays(currentDate, 1);
-        }
-      } else if (expense.frequency === 'biweekly') {
-        // Para frecuencia quincenal, usamos el día 1 y 15 del mes (o el último día si el mes tiene menos de 15 días)
-        dueDates.push(new Date(parseInt(year), parseInt(monthNum) - 1, 1));
-        if (lastDayOfMonth.getDate() >= 15) {
-          dueDates.push(new Date(parseInt(year), parseInt(monthNum) - 1, 15));
-        }
-      }
-
-      // Crear una tarea para cada fecha de vencimiento calculada
-      for (const dueDate of dueDates) {
-        // Verificar si ya existe una tarea para este gasto fijo en esta fecha
-        const { data: existingTasks, error: checkError } = await supabase
-          .from('financial_tasks')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('fixed_expense_id', expense.id)
-          .eq('due_date', format(dueDate, 'yyyy-MM-dd'));
-
-        if (checkError) {
-          console.error('Error checking existing tasks:', checkError);
-          continue; // Continuamos con el siguiente si hay error
-        }
-
-        // Si no existe una tarea, la creamos
-        if (!existingTasks || existingTasks.length === 0) {
-          const formattedDueDate = format(dueDate, 'yyyy-MM-dd');
-          
-          const newTask: FinancialTaskInput = {
-            user_id: userId,
-            fixed_expense_id: expense.id,
-            title: expense.name,
-            amount: expense.amount,
-            due_date: formattedDueDate,
-            status: 'pending',
-            payment_date: null,
-            comments: null
-          };
-
-          try {
-            const createdTask = await createFinancialTask(newTask);
-            createdTasks.push(createdTask);
-          } catch (createError) {
-            console.error('Error creating task from fixed expense:', createError);
-          }
-        }
-      }
-    }
-
-    return createdTasks;
+    return data || [];
   } catch (error) {
-    console.error('Error generating tasks from fixed expenses:', error);
-    throw new Error('No se pudieron generar las tareas desde los gastos fijos');
+    console.error('Error in generateTasksFromFixedExpenses:', error);
+    throw error;
   }
 }
 

@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background-light: #f0f4f8;
+  --background-dark: #1a202c;
+  --foreground-light: #1a202c;
+  --foreground-dark: #f0f4f8;
   --primary: #3b82f6;
   --primary-foreground: #ffffff;
   --secondary: #f3f4f6;
@@ -11,8 +13,10 @@
   --accent-foreground: #ffffff;
   --muted: #f3f4f6;
   --muted-foreground: #6b7280;
-  --card: #ffffff;
-  --card-foreground: #171717;
+  --card-light: #ffffff;
+  --card-dark: #2d3748;
+  --card-foreground-light: #171717;
+  --card-foreground-dark: #f0f4f8;
   --border: #e5e7eb;
   --input: #e5e7eb;
   --ring: #3b82f6;
@@ -20,8 +24,8 @@
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--background-light);
+  --color-foreground: var(--foreground-light);
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
   --color-accent: var(--accent);
@@ -236,4 +240,135 @@ button, a {
 
 .animate-collapsible-up {
   animation: collapsible-up 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation-name: fadeIn;
+  animation-fill-mode: both;
+  animation-timing-function: ease-in-out;
+}
+
+/* Mejoras para selectores */
+.select-dropdown-container {
+  isolation: isolate;
+}
+
+/* Estilos para el dropdown en dispositivos móviles */
+@media (max-width: 640px) {
+  .fixed.sm\:absolute {
+    position: fixed;
+    top: auto !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    width: 90vw !important;
+    max-width: 90vw !important;
+    margin: 0 auto;
+    bottom: 5vh !important;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  
+  /* Aumentar tamaño mínimo para dropdowns */
+  .select-dropdown-container {
+    min-height: 65px;
+  }
+}
+
+/* Mejoras para dispositivos táctiles */
+@media (max-width: 768px) {
+  button, 
+  .button,
+  [role="button"],
+  a {
+    min-height: 42px;
+  }
+  
+  .btn-touch-target {
+    min-width: 42px;
+    min-height: 42px;
+  }
+}
+
+/* Mejoras para navegación y botones principales */
+.rounded-full.px-5.py-3 {
+  transition: all 0.2s ease;
+  font-weight: 500;
+  min-height: 44px;
+}
+
+.rounded-full.px-5.py-3:hover {
+  transform: translateY(-1px);
+}
+
+.rounded-full.border-2 {
+  border-width: 2px;
+}
+
+/* Estilos para inputs y elementos de formulario */
+input.h-10 {
+  min-height: 46px;
+}
+
+.relative.select-dropdown-container {
+  min-height: 70px;
+}
+
+/* Mejoras para las filas de la tabla */
+tr.border-b {
+  height: 60px;
+}
+
+th, td {
+  vertical-align: middle;
+}
+
+/* Espacio adicional para el formulario en vista móvil */
+@media (max-width: 768px) {
+  form.space-y-4 {
+    margin-bottom: 80px;
+  }
+  
+  .select-dropdown-container {
+    position: relative;
+    z-index: 50;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+@layer utilities {
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
 }

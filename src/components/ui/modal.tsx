@@ -18,7 +18,7 @@ export function Modal({ isOpen, onClose, title, children, className = '' }: Moda
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div 
-        className={`bg-background rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-auto ${className}`}
+        className={`bg-background rounded-lg shadow-lg max-w-lg w-full max-h-[90vh] overflow-auto ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b">

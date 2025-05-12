@@ -1,9 +1,99 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Función para obtener la sesión actual
+export const getCurrentSession = async () => {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    console.error('Error al obtener la sesión:', error);
+    return null;
+  }
+  return data.session;
+};
+
+// Función para obtener el usuario actual
+export const getCurrentUser = async () => {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error('Error al obtener el usuario:', error);
+    return null;
+  }
+  return user;
+};
+
+// Función para iniciar sesión con email y contraseña
+export const signInWithPassword = async (email: string, password: string) => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  
+  if (error) {
+    console.error('Error al iniciar sesión:', error);
+    throw error;
+  }
+  
+  return data;
+};
+
+// Función para registrar un nuevo usuario
+export const signUp = async (email: string, password: string) => {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+  
+  if (error) {
+    console.error('Error al registrar usuario:', error);
+    throw error;
+  }
+  
+  return data;
+};
+
+// Función para cerrar sesión
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  
+  if (error) {
+    console.error('Error al cerrar sesión:', error);
+    throw error;
+  }
+  
+  return true;
+};
+
+// Función para solicitar restablecimiento de contraseña
+export const resetPassword = async (email: string) => {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  
+  if (error) {
+    console.error('Error al enviar correo de restablecimiento:', error);
+    throw error;
+  }
+  
+  return data;
+};
+
+// Función para actualizar contraseña
+export const updatePassword = async (newPassword: string) => {
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+  
+  if (error) {
+    console.error('Error al actualizar contraseña:', error);
+    throw error;
+  }
+  
+  return data;
+};
 
 export type Database = {
   public: {
@@ -47,6 +137,7 @@ export type Database = {
           date: string;
           description: string | null;
           created_at: string;
+          is_budgetable: boolean;
         };
         Insert: {
           id?: string;
@@ -57,6 +148,7 @@ export type Database = {
           date: string;
           description?: string | null;
           created_at?: string;
+          is_budgetable?: boolean;
         };
         Update: {
           id?: string;
@@ -67,6 +159,7 @@ export type Database = {
           date?: string;
           description?: string | null;
           created_at?: string;
+          is_budgetable?: boolean;
         };
       };
       categories: {

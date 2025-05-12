@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, ReactNode } from 'react';
 import { twMerge } from 'tailwind-merge';
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'success';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'success' | 'default' | 'ghost';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -28,6 +28,8 @@ export function Button({
     outline: 'bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
     success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
+    default: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
   };
 
   const sizeClasses = {

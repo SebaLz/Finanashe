@@ -1,6 +1,5 @@
 "use client";
 
-import { Layout } from '@/components/layout/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectOption } from '@/components/ui/select';
 import { useState, useEffect } from 'react';
@@ -290,161 +289,159 @@ export default function EstadisticasPage() {
   };
 
   return (
-    <Layout>
-      <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold">Estadísticas Financieras</h1>
-          <div className="flex items-center space-x-2">
-            <Select
-              options={periodos}
-              value={periodo}
-              onChange={(e) => setPeriodo(e.target.value)}
-              className="w-48"
-            />
-          </div>
+    <div className="flex flex-col space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="text-2xl font-bold">Estadísticas Financieras</h1>
+        <div className="flex items-center space-x-2">
+          <Select
+            options={periodos}
+            value={periodo}
+            onChange={(e) => setPeriodo(e.target.value)}
+            className="w-48"
+          />
         </div>
+      </div>
 
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2">Cargando estadísticas...</span>
-          </div>
-        ) : error ? (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <p>{error}</p>
-            <p className="text-sm mt-2">Asegúrate de tener transacciones registradas para poder visualizar estadísticas.</p>
-          </div>
-        ) : (
-          <>
-            {/* Resumen */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ingresos Totales</p>
-                    <h3 className="text-2xl font-bold text-green-600">+${resumenData.ingresoTotal.toLocaleString()}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Gastos Totales</p>
-                    <h3 className="text-2xl font-bold text-red-600">-${resumenData.gastoTotal.toLocaleString()}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ahorro</p>
-                    <h3 className={`text-2xl font-bold ${resumenData.ahorro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ${resumenData.ahorro.toLocaleString()} ({resumenData.porcentajeAhorro}%)
-                    </h3>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Mayor Gasto</p>
-                    <h3 className="text-2xl font-bold">{resumenData.mayorGasto.categoria}</h3>
-                    <p className="text-red-600">-${resumenData.mayorGasto.monto.toLocaleString()}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Ingresos vs. Gastos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <Line data={lineChartData} options={lineChartOptions} />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gastos por Categoría</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <Bar data={barChartData} options={barChartOptions} />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Cargando estadísticas...</span>
+        </div>
+      ) : error ? (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <p>{error}</p>
+          <p className="text-sm mt-2">Asegúrate de tener transacciones registradas para poder visualizar estadísticas.</p>
+        </div>
+      ) : (
+        <>
+          {/* Resumen */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ingresos Totales</p>
+                  <h3 className="text-2xl font-bold text-green-600">+${resumenData.ingresoTotal.toLocaleString()}</h3>
+                </div>
+              </CardContent>
+            </Card>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Distribución de Gastos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80">
-                    <Pie data={pieChartData} options={pieChartOptions} />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Análisis de Tendencia</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${
-                        resumenData.tendencia === 'positiva' ? 'bg-green-500' :
-                        resumenData.tendencia === 'negativa' ? 'bg-red-500' : 'bg-yellow-500'
-                      }`} />
-                      <p className="font-medium">
-                        Tendencia: {
-                          resumenData.tendencia === 'positiva' ? 'Positiva' :
-                          resumenData.tendencia === 'negativa' ? 'Negativa' : 'Estable'
-                        }
-                      </p>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {resumenData.tendencia === 'positiva' ? 
-                        'Tu situación financiera está mejorando. Sigues ahorrando más que el mes anterior.' :
-                        resumenData.tendencia === 'negativa' ?
-                        'Tu situación financiera está empeorando. Estás ahorrando menos que el mes anterior.' :
-                        'Tu situación financiera se mantiene estable.'
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Gastos Totales</p>
+                  <h3 className="text-2xl font-bold text-red-600">-${resumenData.gastoTotal.toLocaleString()}</h3>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ahorro</p>
+                  <h3 className={`text-2xl font-bold ${resumenData.ahorro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ${resumenData.ahorro.toLocaleString()} ({resumenData.porcentajeAhorro}%)
+                  </h3>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Mayor Gasto</p>
+                  <h3 className="text-2xl font-bold">{resumenData.mayorGasto.categoria}</h3>
+                  <p className="text-red-600">-${resumenData.mayorGasto.monto.toLocaleString()}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Ingresos vs. Gastos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <Line data={lineChartData} options={lineChartOptions} />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Gastos por Categoría</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <Bar data={barChartData} options={barChartOptions} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribución de Gastos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <Pie data={pieChartData} options={pieChartOptions} />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Análisis de Tendencia</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <div className={`w-3 h-3 rounded-full mr-2 ${
+                      resumenData.tendencia === 'positiva' ? 'bg-green-500' :
+                      resumenData.tendencia === 'negativa' ? 'bg-red-500' : 'bg-yellow-500'
+                    }`} />
+                    <p className="font-medium">
+                      Tendencia: {
+                        resumenData.tendencia === 'positiva' ? 'Positiva' :
+                        resumenData.tendencia === 'negativa' ? 'Negativa' : 'Estable'
                       }
                     </p>
-                    
-                    <div className="pt-4 border-t">
-                      <h4 className="font-medium mb-2">Recomendaciones</h4>
-                      <ul className="list-disc list-inside text-sm space-y-1 text-gray-600 dark:text-gray-400">
-                        {resumenData.porcentajeAhorro < 20 && (
-                          <li>Intenta aumentar tu porcentaje de ahorro al menos al 20%.</li>
-                        )}
-                        {resumenData.mayorGasto.monto > (resumenData.ingresoTotal * 0.4) && (
-                          <li>Tu mayor gasto representa más del 40% de tus ingresos. Considera reducirlo.</li>
-                        )}
-                        {resumenData.tendencia === 'negativa' && (
-                          <li>Revisa tus gastos recientes para identificar áreas donde puedas reducir.</li>
-                        )}
-                        <li>Diversifica tus fuentes de ingresos para mayor estabilidad financiera.</li>
-                      </ul>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
-      </div>
-    </Layout>
+                  
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {resumenData.tendencia === 'positiva' ? 
+                      'Tu situación financiera está mejorando. Sigues ahorrando más que el mes anterior.' :
+                      resumenData.tendencia === 'negativa' ?
+                      'Tu situación financiera está empeorando. Estás ahorrando menos que el mes anterior.' :
+                      'Tu situación financiera se mantiene estable.'
+                    }
+                  </p>
+                  
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-2">Recomendaciones</h4>
+                    <ul className="list-disc list-inside text-sm space-y-1 text-gray-600 dark:text-gray-400">
+                      {resumenData.porcentajeAhorro < 20 && (
+                        <li>Intenta aumentar tu porcentaje de ahorro al menos al 20%.</li>
+                      )}
+                      {resumenData.mayorGasto.monto > (resumenData.ingresoTotal * 0.4) && (
+                        <li>Tu mayor gasto representa más del 40% de tus ingresos. Considera reducirlo.</li>
+                      )}
+                      {resumenData.tendencia === 'negativa' && (
+                        <li>Revisa tus gastos recientes para identificar áreas donde puedas reducir.</li>
+                      )}
+                      <li>Diversifica tus fuentes de ingresos para mayor estabilidad financiera.</li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </div>
   );
 } 

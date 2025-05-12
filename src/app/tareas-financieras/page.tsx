@@ -1,6 +1,5 @@
 "use client";
 
-import { Layout } from '@/components/layout/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
@@ -382,412 +381,410 @@ export default function TareasFinancierasPage() {
   }, {} as Record<string, { name: string; color: string; tasks: FinancialTaskWithDetails[] }>);
 
   return (
-    <Layout>
-      <div className="flex flex-col space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Tareas Financieras</h1>
-          <div className="flex items-center gap-3">
-            <Select
-              options={monthOptions}
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              className="w-48"
-            />
-            <Button 
-              variant="secondary" 
-              className="flex items-center gap-2"
-              onClick={handleGenerateTasks}
-              disabled={generating}
-            >
-              {generating ? (
-                <>
-                  <LoaderCircle className="animate-spin" size={18} />
-                  Generando...
-                </>
-              ) : (
-                <>
-                  <Calendar size={18} />
-                  Generar Tareas
-                </>
-              )}
-            </Button>
-          </div>
+    <div className="flex flex-col space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Tareas Financieras</h1>
+        <div className="flex items-center gap-3">
+          <Select
+            options={monthOptions}
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+            className="w-48"
+          />
+          <Button 
+            variant="secondary" 
+            className="flex items-center gap-2"
+            onClick={handleGenerateTasks}
+            disabled={generating}
+          >
+            {generating ? (
+              <>
+                <LoaderCircle className="animate-spin" size={18} />
+                Generando...
+              </>
+            ) : (
+              <>
+                <Calendar size={18} />
+                Generar Tareas
+              </>
+            )}
+          </Button>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Tareas Pendientes</p>
-                <div className="flex items-baseline gap-2">
-                  <h3 className="text-2xl font-bold">{stats.pendingTasks}</h3>
-                  <span className="text-sm text-muted-foreground">de {stats.totalTasks}</span>
-                </div>
-                <Progress value={stats.completionRate} className="h-2" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Monto Pendiente</p>
-                <h3 className="text-2xl font-bold">${stats.totalPendingAmount.toLocaleString()}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {stats.pendingTasks} {stats.pendingTasks === 1 ? 'tarea' : 'tareas'} por pagar
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Monto Pagado</p>
-                <h3 className="text-2xl font-bold">${stats.totalPaidAmount.toLocaleString()}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {stats.totalTasks - stats.pendingTasks} {stats.totalTasks - stats.pendingTasks === 1 ? 'tarea' : 'tareas'} pagadas
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Tasa de Completado</p>
-                <h3 className="text-2xl font-bold">{Math.round(stats.completionRate)}%</h3>
-                <Progress value={stats.completionRate} className="h-2" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input
-                    placeholder="Buscar tareas..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Tareas Pendientes</p>
+              <div className="flex items-baseline gap-2">
+                <h3 className="text-2xl font-bold">{stats.pendingTasks}</h3>
+                <span className="text-sm text-muted-foreground">de {stats.totalTasks}</span>
               </div>
-              <div className="flex gap-2">
-                <Select
-                  value={selectedCategory}
-                  onChange={setSelectedCategory}
-                  options={[
-                    { value: 'all', label: 'Todas las categorías' },
-                    ...categories.map(cat => ({ value: cat.id, label: cat.name }))
-                  ]}
-                  className="w-48"
-                />
-                <Select
-                  value={sortBy}
-                  onChange={(value) => setSortBy(value as 'date' | 'amount' | 'title')}
-                  options={[
-                    { value: 'date', label: 'Ordenar por fecha' },
-                    { value: 'amount', label: 'Ordenar por monto' },
-                    { value: 'title', label: 'Ordenar por título' }
-                  ]}
-                  className="w-48"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                >
-                  {sortOrder === 'asc' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setShowCalendar(!showCalendar)}
-                >
-                  <CalendarIcon size={18} />
-                </Button>
-              </div>
+              <Progress value={stats.completionRate} className="h-2" />
             </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle>Tareas</CardTitle>
-              <Tabs 
-                defaultValue="all" 
-                value={selectedStatus} 
-                onValueChange={(value) => setSelectedStatus(value as 'all' | 'pending' | 'paid')}
-                className="w-auto"
-              >
-                <TabsList>
-                  <TabsTrigger value="all">Todas</TabsTrigger>
-                  <TabsTrigger value="pending">Pendientes</TabsTrigger>
-                  <TabsTrigger value="paid">Pagadas</TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Monto Pendiente</p>
+              <h3 className="text-2xl font-bold">${stats.totalPendingAmount.toLocaleString()}</h3>
+              <p className="text-xs text-muted-foreground">
+                {stats.pendingTasks} {stats.pendingTasks === 1 ? 'tarea' : 'tareas'} por pagar
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center items-center py-8">
-                <LoaderCircle className="animate-spin mr-2" size={20} />
-                <span>Cargando tareas...</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Monto Pagado</p>
+              <h3 className="text-2xl font-bold">${stats.totalPaidAmount.toLocaleString()}</h3>
+              <p className="text-xs text-muted-foreground">
+                {stats.totalTasks - stats.pendingTasks} {stats.totalTasks - stats.pendingTasks === 1 ? 'tarea' : 'tareas'} pagadas
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Tasa de Completado</p>
+              <h3 className="text-2xl font-bold">{Math.round(stats.completionRate)}%</h3>
+              <Progress value={stats.completionRate} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                <Input
+                  placeholder="Buscar tareas..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
               </div>
-            ) : error ? (
-              <div className="flex justify-center items-center py-8">
-                <AlertCircle className="text-red-500 mr-2" size={20} />
-                <span className="text-red-500">{error}</span>
-              </div>
-            ) : processedTasks.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No hay tareas financieras para mostrar.</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={handleGenerateTasks}
-                  disabled={generating}
-                >
-                  {generating ? 'Generando...' : 'Generar desde gastos fijos'}
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {Object.entries(tasksByCategory).map(([categoryId, { name, color, tasks }]) => (
-                  <Collapsible key={categoryId} defaultOpen>
-                    <div className="flex items-center justify-between mb-2">
-                      <CollapsibleTrigger className="flex items-center gap-2 hover:opacity-80">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: color }}
-                        />
-                        <h3 className="font-medium">{name}</h3>
-                        <span className="text-sm text-muted-foreground">({tasks.length})</span>
-                      </CollapsibleTrigger>
-                      <div className="text-sm text-muted-foreground">
-                        ${tasks.reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
-                      </div>
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={selectedCategory}
+                onChange={setSelectedCategory}
+                options={[
+                  { value: 'all', label: 'Todas las categorías' },
+                  ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                ]}
+                className="w-48"
+              />
+              <Select
+                value={sortBy}
+                onChange={(value) => setSortBy(value as 'date' | 'amount' | 'title')}
+                options={[
+                  { value: 'date', label: 'Ordenar por fecha' },
+                  { value: 'amount', label: 'Ordenar por monto' },
+                  { value: 'title', label: 'Ordenar por título' }
+                ]}
+                className="w-48"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              >
+                {sortOrder === 'asc' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowCalendar(!showCalendar)}
+              >
+                <CalendarIcon size={18} />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-center">
+            <CardTitle>Tareas</CardTitle>
+            <Tabs 
+              defaultValue="all" 
+              value={selectedStatus} 
+              onValueChange={(value) => setSelectedStatus(value as 'all' | 'pending' | 'paid')}
+              className="w-auto"
+            >
+              <TabsList>
+                <TabsTrigger value="all">Todas</TabsTrigger>
+                <TabsTrigger value="pending">Pendientes</TabsTrigger>
+                <TabsTrigger value="paid">Pagadas</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <LoaderCircle className="animate-spin mr-2" size={20} />
+              <span>Cargando tareas...</span>
+            </div>
+          ) : error ? (
+            <div className="flex justify-center items-center py-8">
+              <AlertCircle className="text-red-500 mr-2" size={20} />
+              <span className="text-red-500">{error}</span>
+            </div>
+          ) : processedTasks.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No hay tareas financieras para mostrar.</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={handleGenerateTasks}
+                disabled={generating}
+              >
+                {generating ? 'Generando...' : 'Generar desde gastos fijos'}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(tasksByCategory).map(([categoryId, { name, color, tasks }]) => (
+                <Collapsible key={categoryId} defaultOpen>
+                  <div className="flex items-center justify-between mb-2">
+                    <CollapsibleTrigger className="flex items-center gap-2 hover:opacity-80">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: color }}
+                      />
+                      <h3 className="font-medium">{name}</h3>
+                      <span className="text-sm text-muted-foreground">({tasks.length})</span>
+                    </CollapsibleTrigger>
+                    <div className="text-sm text-muted-foreground">
+                      ${tasks.reduce((sum, t) => sum + t.amount, 0).toLocaleString()}
                     </div>
-                    <CollapsibleContent>
-                      <div className="space-y-3 pl-4 border-l-2" style={{ borderColor: `${color}40` }}>
-                        {tasks.map((task) => (
-                          <div 
-                            key={task.id} 
-                            className={`border rounded-lg p-4 ${
-                              task.status === 'paid' 
-                                ? 'bg-muted/30' 
-                                : isPast(parseISO(task.due_date)) && !isToday(parseISO(task.due_date))
-                                  ? 'border-red-500/30'
-                                  : isToday(parseISO(task.due_date))
-                                    ? 'border-yellow-500/30'
-                                    : ''
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="space-y-2 flex-1">
-                                <h3 className="font-medium flex items-center gap-2">
-                                  {task.title}
-                                  {task.fixed_expense && (
-                                    <Badge variant="outline" className="text-xs">
-                                      Recurrente
-                                    </Badge>
-                                  )}
-                                </h3>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm text-muted-foreground">
-                                    Fecha: {format(parseISO(task.due_date), 'dd/MM/yyyy')}
-                                  </span>
-                                  <span className="font-medium">${task.amount.toLocaleString()}</span>
-                                </div>
-                                {task.fixed_expense?.description && (
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    {task.fixed_expense.description}
-                                  </p>
+                  </div>
+                  <CollapsibleContent>
+                    <div className="space-y-3 pl-4 border-l-2" style={{ borderColor: `${color}40` }}>
+                      {tasks.map((task) => (
+                        <div 
+                          key={task.id} 
+                          className={`border rounded-lg p-4 ${
+                            task.status === 'paid' 
+                              ? 'bg-muted/30' 
+                              : isPast(parseISO(task.due_date)) && !isToday(parseISO(task.due_date))
+                                ? 'border-red-500/30'
+                                : isToday(parseISO(task.due_date))
+                                  ? 'border-yellow-500/30'
+                                  : ''
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-2 flex-1">
+                              <h3 className="font-medium flex items-center gap-2">
+                                {task.title}
+                                {task.fixed_expense && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Recurrente
+                                  </Badge>
                                 )}
-                                {task.fixed_expense?.installments && (
-                                  <div className="mt-2">
-                                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                      <span>Cuotas: {task.fixed_expense.installments}</span>
-                                      <span>Progreso</span>
-                                    </div>
-                                    <Progress 
-                                      value={(task.fixed_expense.paid_installments || 0) / task.fixed_expense.installments * 100} 
-                                      className="h-1.5"
-                                    />
-                                  </div>
-                                )}
+                              </h3>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm text-muted-foreground">
+                                  Fecha: {format(parseISO(task.due_date), 'dd/MM/yyyy')}
+                                </span>
+                                <span className="font-medium">${task.amount.toLocaleString()}</span>
                               </div>
-                              <div className="flex items-start gap-3">
-                                {renderTaskStatus(task)}
+                              {task.fixed_expense?.description && (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {task.fixed_expense.description}
+                                </p>
+                              )}
+                              {task.fixed_expense?.installments && (
+                                <div className="mt-2">
+                                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                                    <span>Cuotas: {task.fixed_expense.installments}</span>
+                                    <span>Progreso</span>
+                                  </div>
+                                  <Progress 
+                                    value={(task.fixed_expense.paid_installments || 0) / task.fixed_expense.installments * 100} 
+                                    className="h-1.5"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-start gap-3">
+                              {renderTaskStatus(task)}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2"
+                                onClick={() => handleOpenModal(task)}
+                              >
+                                Editar
+                              </Button>
+                              {task.status === 'pending' ? (
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleMarkAsPaid(task.id)}
+                                >
+                                  Marcar como pagado
+                                </Button>
+                              ) : (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="h-8 px-2"
-                                  onClick={() => handleOpenModal(task)}
+                                  onClick={() => handleMarkAsPending(task.id)}
                                 >
-                                  Editar
+                                  Marcar como pendiente
                                 </Button>
-                                {task.status === 'pending' ? (
-                                  <Button
-                                    size="sm"
-                                    variant="success"
-                                    onClick={() => handleMarkAsPaid(task.id)}
-                                  >
-                                    Marcar como pagado
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleMarkAsPending(task.id)}
-                                  >
-                                    Marcar como pendiente
-                                  </Button>
-                                )}
-                              </div>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        <Modal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)}
-          title={isEditing ? "Editar tarea" : "Nueva tarea"}
-          className="max-w-2xl"
-        >
-          <div className="space-y-6">
-            {/* Datos de la tarea */}
-            <div className="space-y-4">
-              <h3 className="font-medium text-sm text-muted-foreground">Datos de la tarea</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Título</label>
-                  <Input
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Ej. Alquiler, Netflix, etc."
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Monto</label>
-                  <Input
-                    type="number"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha de vencimiento</label>
-                  <Input
-                    value={formData.due_date}
-                    onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                    type="date"
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Estado</label>
-                  <Select
-                    options={[{ value: 'pending', label: 'Pendiente' }, { value: 'paid', label: 'Pagada' }]}
-                    value={formData.status}
-                    onChange={(value) => setFormData({ ...formData, status: value as 'pending' | 'paid' })}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
             </div>
-
-            {/* Datos del gasto fijo (solo si existe) */}
-            {selectedTask?.fixed_expense && (
-              <div className="border-t pt-4 space-y-4">
-                <h3 className="font-medium text-sm text-muted-foreground">Datos del gasto fijo</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Categoría</label>
-                    <Select
-                      value={formData.category_id}
-                      onChange={(value) => setFormData({ ...formData, category_id: value })}
-                      options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
-                      placeholder="Selecciona una categoría"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Frecuencia</label>
-                    <Select
-                      value={formData.frequency}
-                      onChange={(value) => setFormData({ ...formData, frequency: value as 'monthly' | 'weekly' | 'biweekly' })}
-                      options={[
-                        { value: 'monthly', label: 'Mensual' },
-                        { value: 'weekly', label: 'Semanal' },
-                        { value: 'biweekly', label: 'Quincenal' }
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Día de vencimiento</label>
-                    <Input
-                      type="number"
-                      value={formData.fixed_due_date}
-                      onChange={(e) => setFormData({ ...formData, fixed_due_date: e.target.value })}
-                      min="1"
-                      max="31"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Cuotas (opcional)</label>
-                    <Input
-                      type="number"
-                      value={formData.installments}
-                      onChange={(e) => setFormData({ ...formData, installments: e.target.value })}
-                      placeholder="Número de cuotas"
-                      min="1"
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Descripción (opcional)</label>
-                    <Input
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Agrega detalles adicionales sobre el gasto"
-                    />
-                  </div>
-                </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)}
+        title={isEditing ? "Editar tarea" : "Nueva tarea"}
+        className="max-w-2xl"
+      >
+        <div className="space-y-6">
+          {/* Datos de la tarea */}
+          <div className="space-y-4">
+            <h3 className="font-medium text-sm text-muted-foreground">Datos de la tarea</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Título</label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Ej. Alquiler, Netflix, etc."
+                  className="w-full"
+                />
               </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleUpdate}
-                disabled={!formData.title.trim() || !formData.amount.trim() || !formData.due_date.trim()}
-              >
-                {isEditing ? "Actualizar" : "Guardar"}
-              </Button>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Monto</label>
+                <Input
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Fecha de vencimiento</label>
+                <Input
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                  type="date"
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Estado</label>
+                <Select
+                  options={[{ value: 'pending', label: 'Pendiente' }, { value: 'paid', label: 'Pagada' }]}
+                  value={formData.status}
+                  onChange={(value) => setFormData({ ...formData, status: value as 'pending' | 'paid' })}
+                  className="w-full"
+                />
+              </div>
             </div>
           </div>
-        </Modal>
-      </div>
-    </Layout>
+
+          {/* Datos del gasto fijo (solo si existe) */}
+          {selectedTask?.fixed_expense && (
+            <div className="border-t pt-4 space-y-4">
+              <h3 className="font-medium text-sm text-muted-foreground">Datos del gasto fijo</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Categoría</label>
+                  <Select
+                    value={formData.category_id}
+                    onChange={(value) => setFormData({ ...formData, category_id: value })}
+                    options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
+                    placeholder="Selecciona una categoría"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Frecuencia</label>
+                  <Select
+                    value={formData.frequency}
+                    onChange={(value) => setFormData({ ...formData, frequency: value as 'monthly' | 'weekly' | 'biweekly' })}
+                    options={[
+                      { value: 'monthly', label: 'Mensual' },
+                      { value: 'weekly', label: 'Semanal' },
+                      { value: 'biweekly', label: 'Quincenal' }
+                    ]}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Día de vencimiento</label>
+                  <Input
+                    type="number"
+                    value={formData.fixed_due_date}
+                    onChange={(e) => setFormData({ ...formData, fixed_due_date: e.target.value })}
+                    min="1"
+                    max="31"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Cuotas (opcional)</label>
+                  <Input
+                    type="number"
+                    value={formData.installments}
+                    onChange={(e) => setFormData({ ...formData, installments: e.target.value })}
+                    placeholder="Número de cuotas"
+                    min="1"
+                  />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <label className="text-sm font-medium">Descripción (opcional)</label>
+                  <Input
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Agrega detalles adicionales sobre el gasto"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setIsModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              disabled={!formData.title.trim() || !formData.amount.trim() || !formData.due_date.trim()}
+            >
+              {isEditing ? "Actualizar" : "Guardar"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
   );
 } 
