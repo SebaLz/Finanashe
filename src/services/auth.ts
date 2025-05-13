@@ -25,9 +25,22 @@ export async function signUp(credentials: UserCredentials, profile?: UserProfile
     throw new Error('No se pudo registrar el usuario');
   }
 
-  // No intentamos crear el perfil de usuario aquí, ya que la política RLS
-  // no permite la inserción hasta que el usuario esté autenticado.
-  // El perfil se creará cuando el usuario confirme su correo y se autentique.
+  // Crear el perfil de usuario usando el cliente público
+  if (data.user) {
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert({
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || null,
+        phone: data.user.user_metadata?.phone || null,
+        whatsapp: data.user.user_metadata?.whatsapp || null
+      });
+
+    if (profileError) {
+      console.error('Error creating user profile during sign up:', profileError);
+    }
+  }
 
   return data;
 }
@@ -43,7 +56,7 @@ export async function signIn(credentials: UserCredentials) {
     throw new Error('No se pudo iniciar sesión');
   }
 
-  // Verificar si el usuario ya tiene un perfil, si no, crearlo
+  // Verificar si el usuario ya tiene un perfil, si no, crearlo usando el cliente público
   if (data.user) {
     const { data: existingProfile } = await supabase
       .from('users')
@@ -64,7 +77,6 @@ export async function signIn(credentials: UserCredentials) {
 
       if (profileError) {
         console.error('Error creating user profile during sign in:', profileError);
-        // No lanzamos error para no interrumpir el inicio de sesión
       }
     }
   }

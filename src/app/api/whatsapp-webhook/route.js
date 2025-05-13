@@ -121,23 +121,27 @@ export async function POST(request) {
 
 async function interpretarMensaje(texto) {
   const prompt = `
-Eres un asistente que interpreta mensajes de WhatsApp sobre finanzas personales. 
-Tu tarea es extraer el tipo de operación ("expense" o "income"), el monto (solo el número, sin símbolos ni palabras), y la categoría (una sola palabra, en minúsculas) del siguiente mensaje.
+Sos un asistente financiero que recibe mensajes cortos de texto por WhatsApp para registrar transacciones personales.
 
-Devuelve SOLO un JSON válido con las claves: tipo, monto, categoria. 
-No agregues texto extra, solo el JSON.
+Tu objetivo es interpretar el mensaje y devolver un JSON con esta estructura:
+{
+  "tipo": "...",         // Puede ser: gasto, ingreso, presupuesto, inversión o desconocido
+  "fecha": "...",        // Fecha mencionada o "hoy" si no hay fecha
+  "categoría": "...",    // Rubro del gasto/ingreso/inversión/presupuesto
+  "monto": ...,          // Solo el número, sin signos ni símbolos
+  "medio_pago": "..."    // Medio si está presente: efectivo, tarjeta, transferencia, etc. Si no, devolver vacío ""
+}
 
-Ejemplo 1:
-Mensaje: "gaste 50mil en supermercado"
-Respuesta: {"tipo":"expense","monto":50000,"categoria":"supermercado"}
-
-Ejemplo 2:
-Mensaje: "me pagaron 120000 de sueldo"
-Respuesta: {"tipo":"income","monto":120000,"categoria":"sueldo"}
-
-Ejemplo 3:
-Mensaje: "compré pan por 300"
-Respuesta: {"tipo":"expense","monto":300,"categoria":"pan"}
+Reglas:
+- Si el monto empieza con "-" es gasto.
+- Si empieza con "+" es ingreso.
+- Si no tiene signo, inferí el tipo por palabras clave como: gasté, compré, invertí, ingreso, cobré, gané, presupuesto, ahorré, etc.
+- Si no se puede determinar el tipo, devolver "desconocido".
+- Fecha puede ser: hoy, ayer, 11-May-2025, mañana, etc.
+- Categoría debe ser simple y representativa.
+- Medio de pago es opcional. Si no se menciona, dejar vacío.
+- Nunca devuelvas texto fuera del JSON. Solo el JSON.
+- No incluyas notas, ni explicaciones, ni respuestas amigables.
 
 Mensaje: "${texto}"
 `;
