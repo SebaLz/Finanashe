@@ -3,7 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: false,
-  fastRefresh: false,
   webpack: (config) => {
     // Reducir la frecuencia de las verificaciones del sistema de archivos
     config.watchOptions = {
