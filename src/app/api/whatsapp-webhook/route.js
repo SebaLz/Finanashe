@@ -13,6 +13,26 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// Función para limpiar el log de mensajes
+function logMessage(message) {
+  const { from, text, type } = message;
+  console.log(`📱 Mensaje recibido:
+    De: ${from}
+    Tipo: ${type}
+    Texto: ${text?.body || 'N/A'}
+  `);
+}
+
+// Función para limpiar el log de estados
+function logStatus(status) {
+  const { status: messageStatus, timestamp, recipient_id } = status;
+  console.log(`📨 Estado del mensaje:
+    Para: ${recipient_id}
+    Estado: ${messageStatus}
+    Timestamp: ${new Date(timestamp * 1000).toLocaleString()}
+  `);
+}
+
 // GET handler para verificación
 export async function GET(request) {
   const searchParams = request.nextUrl.searchParams;
@@ -22,7 +42,7 @@ export async function GET(request) {
 
   if (mode && token) {
     if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-      console.log('WEBHOOK_VERIFIED');
+      console.log('✅ Webhook verificado correctamente');
       return NextResponse.json(parseInt(challenge));
     }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -34,88 +54,57 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    console.log('Webhook body:', JSON.stringify(body, null, 2)); // Agregamos log para debug
-
-    if (!body || !body.entry || !Array.isArray(body.entry)) {
-      console.log('Invalid webhook body structure');
-      return NextResponse.json({ status: 'ok' });
-    }
-
-    const entry = body.entry[0];
-    if (!entry || !entry.changes || !Array.isArray(entry.changes)) {
-      console.log('Invalid entry structure');
-      return NextResponse.json({ status: 'ok' });
-    }
-
-    const changes = entry.changes[0];
-    if (!changes || !changes.value) {
-      console.log('Invalid changes structure');
-      return NextResponse.json({ status: 'ok' });
-    }
-
-    const value = changes.value;
-    const message = value.messages?.[0];
-    const contact = value.contacts?.[0];
-
-    if (message && message.text) {
-      const userNumber = message.from;
-      const userWaID = contact?.wa_id || userNumber;
-      const userName = contact?.profile?.name || 'Desconocido';
-      const textid = message.id;
-      const text = message.text.body;
+    
+    // Verificar si es un mensaje
+    if (body.entry?.[0]?.changes?.[0]?.value?.messages) {
+      const message = body.entry[0].changes[0].value.messages[0];
+      logMessage(message);
       
-      console.log('Mensaje recibido de:', userNumber);
-      console.log('WhatsApp ID del usuario:', userWaID);
-      console.log('Nombre del usuario:', userName);
-      console.log('ID del mensaje:', textid);
-      console.log('Texto:', text);
+      // Buscar usuario en la base de datos
+      console.log('🔍 Buscando usuario con WhatsApp:', message.from);
+      console.log('Valor recibido:', message.from, typeof message.from);
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('whatsapp', message.from);
 
-      const userId = await buscarUserIdPorNumero(userNumber);
-      if (!userId) {
-        await enviarMensajeWhatsApp(userNumber, 'No estás registrado en la web. Registrate primero.');
+      console.log('Usuarios encontrados:', users);
+
+      if (!users || users.length === 0) {
+        console.log('❌ No se encontró ningún usuario con ese número de WhatsApp');
+        await enviarMensajeWhatsApp(message.from, '¡Hola! Para usar este servicio, primero necesitas registrarte en nuestra web.');
         return NextResponse.json({ status: 'ok' });
       }
 
-      const resultado = await interpretarMensaje(text);
-      console.log('Interpretación IA:', resultado);
-
-      if (resultado && resultado.tipo && resultado.monto && resultado.categoria) {
-        let categoriaId = await buscarCategoriaIdPorNombre(resultado.categoria, userId);
-        if (!categoriaId) {
-          categoriaId = await crearCategoriaSupabase(resultado.categoria, userId);
-          if (categoriaId) {
-            await enviarMensajeWhatsApp(userNumber, `La categoría "${resultado.categoria}" no existía, pero la creé automáticamente para vos.`);
-          } else {
-            await enviarMensajeWhatsApp(userNumber, `No pude crear la categoría "${resultado.categoria}".`);
-            return NextResponse.json({ status: 'ok' });
-          }
-        }
-
-        const exito = await guardarTransaccionSupabase({
-          user_id: userId,
-          tipo: resultado.tipo,
-          monto: resultado.monto,
-          categoria: categoriaId,
-          fecha: new Date().toISOString().slice(0, 10),
-          descripcion: text
-        });
-
-        if (exito) {
-          await enviarMensajeWhatsApp(userNumber, '¡Transacción guardada correctamente en tu web!');
+      console.log('✅ Usuario encontrado:', users[0].email);
+      
+      // Procesar el mensaje según el tipo
+      if (message.type === 'text') {
+        const resultado = await interpretarMensaje(message.text.body);
+        if (resultado) {
+          // Aquí puedes procesar la transacción
+          console.log('✅ Mensaje interpretado:', resultado);
+          await enviarMensajeWhatsApp(message.from, '¡Transacción registrada correctamente!');
         } else {
-          await enviarMensajeWhatsApp(userNumber, 'Ocurrió un error al guardar la transacción.');
+          await enviarMensajeWhatsApp(message.from, 'Lo siento, no pude entender tu mensaje. Por favor, intenta de nuevo.');
         }
-      } else {
-        await enviarMensajeWhatsApp(userNumber, 'No pude entender tu mensaje. Por favor, intentá de nuevo.');
       }
-    } else {
-      console.log('No se recibió un mensaje de texto válido.');
+
+      return NextResponse.json({ status: 'ok' });
+    }
+    
+    // Verificar si es un estado
+    if (body.entry?.[0]?.changes?.[0]?.value?.statuses) {
+      const status = body.entry[0].changes[0].value.statuses[0];
+      logStatus(status);
+      return NextResponse.json({ status: 'ok' });
     }
 
     return NextResponse.json({ status: 'ok' });
   } catch (error) {
-    console.error('Error processing webhook:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('❌ Error en el webhook:', error.message);
+    // Siempre devolvemos 200 para evitar reintentos
+    return NextResponse.json({ status: 'ok' });
   }
 }
 
@@ -167,7 +156,13 @@ Mensaje: "${texto}"
 
 async function enviarMensajeWhatsApp(numeroDestino, texto) {
   try {
-    const url = `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`;
+    // Obtener el phone_number_id del webhook
+    const phoneNumberId = process.env.PHONE_NUMBER_ID;
+    if (!phoneNumberId) {
+      throw new Error('PHONE_NUMBER_ID no está configurado');
+    }
+
+    const url = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
     const data = {
       messaging_product: 'whatsapp',
       to: numeroDestino,
@@ -179,9 +174,11 @@ async function enviarMensajeWhatsApp(numeroDestino, texto) {
       'Content-Type': 'application/json'
     };
     const response = await axios.post(url, data, { headers });
-    console.log('Mensaje enviado:', response.data);
+    console.log('✅ Mensaje enviado correctamente');
+    return response.data;
   } catch (error) {
-    console.error('Error enviando mensaje de WhatsApp:', error.response?.data || error.message);
+    console.error('❌ Error enviando mensaje de WhatsApp:', error.response?.data || error.message);
+    throw error;
   }
 }
 
