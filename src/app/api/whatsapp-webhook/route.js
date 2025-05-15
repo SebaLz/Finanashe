@@ -8,9 +8,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Cliente de Supabase con service role para el webhook
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 );
 
 // Función para limpiar el log de mensajes
@@ -63,12 +70,32 @@ export async function POST(request) {
       // Buscar usuario en la base de datos
       console.log('🔍 Buscando usuario con WhatsApp:', message.from);
       console.log('Valor recibido:', message.from, typeof message.from);
+      
+      // Normalizar el número de teléfono (eliminar caracteres no numéricos)
+      const normalizedPhone = message.from;
+      console.log('Número normalizado:', normalizedPhone);
+      
+      // Primero, veamos todos los usuarios y sus números
+      console.log('Consultando tabla public.users...');
+      const { data: allUsers, error: allUsersError } = await supabase
+        .from('users')
+        .select('id, email, whatsapp, phone');
+      
+      console.log('Resultado de la consulta:', { data: allUsers, error: allUsersError });
+      
+      // Ahora intentamos la búsqueda específica
       const { data: users, error } = await supabase
         .from('users')
         .select('*')
-        .eq('whatsapp', message.from);
+        .in('whatsapp', [normalizedPhone, `+${normalizedPhone}`]);
 
-      console.log('Usuarios encontrados:', users);
+      console.log('Usuarios encontrados en la búsqueda específica:', users);
+      if (error) {
+        console.error('Error en la búsqueda:', error);
+      }
+      if (allUsersError) {
+        console.error('Error obteniendo todos los usuarios:', allUsersError);
+      }
 
       if (!users || users.length === 0) {
         console.log('❌ No se encontró ningún usuario con ese número de WhatsApp');

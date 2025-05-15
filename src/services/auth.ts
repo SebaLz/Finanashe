@@ -39,6 +39,7 @@ export async function signUp(credentials: UserCredentials, profile?: UserProfile
 
     if (profileError) {
       console.error('Error creating user profile during sign up:', profileError);
+      throw new Error('No se pudo crear el perfil de usuario. Contacta al soporte.');
     }
   }
 
@@ -127,5 +128,19 @@ export async function updateUserProfile(userId: string, profile: Partial<UserPro
     throw new Error('No se pudo actualizar el perfil de usuario');
   }
 
+  return data[0];
+}
+
+export async function createUserProfile(userId: string, email: string) {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ id: userId, email });
+
+  if (error) {
+    console.error('Error creating user profile:', error);
+    throw new Error('No se pudo crear el perfil de usuario');
+  }
+
+  if (!data) return null;
   return data[0];
 } 
