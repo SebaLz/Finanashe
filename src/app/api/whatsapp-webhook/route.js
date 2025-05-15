@@ -109,9 +109,33 @@ export async function POST(request) {
       if (message.type === 'text') {
         const resultado = await interpretarMensaje(message.text.body);
         if (resultado) {
-          // Aquí puedes procesar la transacción
+          // Procesar la transacción
           console.log('✅ Mensaje interpretado:', resultado);
-          await enviarMensajeWhatsApp(message.from, '¡Transacción registrada correctamente!');
+          
+          // Buscar o crear la categoría
+          let categoriaId = await buscarCategoriaIdPorNombre(resultado.categoría, users[0].id);
+          if (!categoriaId) {
+            categoriaId = await crearCategoriaSupabase(resultado.categoría, users[0].id);
+          }
+
+          // Guardar la transacción
+          const transaccion = {
+            user_id: users[0].id,
+            tipo: resultado.tipo === 'gasto' ? 'expense' : resultado.tipo === 'ingreso' ? 'income' : resultado.tipo,
+            monto: resultado.monto,
+            categoria: categoriaId,
+            fecha: resultado.fecha === 'hoy' ? new Date().toISOString() : resultado.fecha,
+            descripcion: message.text.body
+          };
+
+          console.log('Intentando guardar transacción:', transaccion);
+          const guardado = await guardarTransaccionSupabase(transaccion);
+          
+          if (guardado) {
+            await enviarMensajeWhatsApp(message.from, '¡Transacción registrada correctamente!');
+          } else {
+            await enviarMensajeWhatsApp(message.from, 'Hubo un error al guardar la transacción. Por favor, intenta de nuevo.');
+          }
         } else {
           await enviarMensajeWhatsApp(message.from, 'Lo siento, no pude entender tu mensaje. Por favor, intenta de nuevo.');
         }
@@ -210,6 +234,7 @@ async function enviarMensajeWhatsApp(numeroDestino, texto) {
 }
 
 async function guardarTransaccionSupabase({ user_id, tipo, monto, categoria, fecha, descripcion }) {
+  console.log('Guardando transacción con datos:', { user_id, tipo, monto, categoria, fecha, descripcion });
   const { data, error } = await supabase
     .from('transactions')
     .insert([{
@@ -219,11 +244,17 @@ async function guardarTransaccionSupabase({ user_id, tipo, monto, categoria, fec
       category_id: categoria,
       date: fecha,
       description: descripcion
-    }]);
+    }])
+    .select();
+
   if (error) {
-    console.error('Error guardando en Supabase:', error);
+    console.error('Error detallado guardando en Supabase:', {
+      error,
+      datos_enviados: { user_id, tipo, monto, categoria, fecha, descripcion }
+    });
     return false;
   }
+  console.log('Transacción guardada exitosamente:', data);
   return true;
 }
 
