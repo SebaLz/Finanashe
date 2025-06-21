@@ -4,7 +4,7 @@ import "./globals.css";
 import { UserProvider } from "@/hooks/useUser";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { ToastProvider } from "@/components/ui/use-toast";
-import AppShell from '@/components/layout/AppShell';
+import ConditionalLayout from '@/components/layout/ConditionalLayout';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,9 +29,9 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <ToastProvider>
-              <AppShell>
+              <ConditionalLayout>
                 {children}
-              </AppShell>
+              </ConditionalLayout>
             </ToastProvider>
           </ThemeProvider>
         </UserProvider>

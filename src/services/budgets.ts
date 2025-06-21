@@ -309,49 +309,73 @@ export async function getBudgetSummary(userId: string, month: string) {
   try {
     console.log('Obteniendo resumen de presupuestos para:', userId, month);
     
-    // Primero, recalcular el total del presupuesto mensual para asegurar datos actualizados
-    await supabase.rpc('calculate_monthly_budget_total', {
-      p_user_id: userId,
-      p_month: month
-    });
+    // Obtener presupuestos del mes actual
+    const budgets = await getBudgets(userId, month);
     
-    // Usar la función RPC para obtener el resumen de presupuestos
-    const { data, error } = await supabase
-      .rpc('get_budget_summary', {
-        p_user_id: userId,
-        p_month: month
+    if (!budgets || budgets.length === 0) {
+      console.log('No hay presupuestos configurados para este mes');
+      return [];
+    }
+    
+    // Calcular gastos del mes actual
+    const monthStart = `${month}-01`;
+    const nextMonth = month.split('-');
+    let year = parseInt(nextMonth[0]);
+    let monthNum = parseInt(nextMonth[1]);
+    
+    if (monthNum === 12) {
+      monthNum = 1;
+      year++;
+    } else {
+      monthNum++;
+    }
+    
+    const nextMonthStr = `${year}-${monthNum.toString().padStart(2, '0')}-01`;
+    
+    // Obtener transacciones del mes
+    const { data: transactions, error: transError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('date', monthStart)
+      .lt('date', nextMonthStr)
+      .eq('type', 'expense');
+    
+    if (transError) {
+      console.error('Error obteniendo transacciones:', transError);
+    }
+    
+    // Calcular gastos por categoría
+    const expensesByCategory: Record<string, number> = {};
+    
+    if (transactions) {
+      transactions.forEach((transaction: any) => {
+        if (!transaction.category_id) return;
+        
+        if (!expensesByCategory[transaction.category_id]) {
+          expensesByCategory[transaction.category_id] = 0;
+        }
+        expensesByCategory[transaction.category_id] += transaction.amount;
       });
-    
-    if (error) {
-      console.error('Error al obtener resumen de presupuestos:', error);
-      return [];
     }
     
-    // Asegurar que data sea un array
-    if (!data || !Array.isArray(data)) {
-      console.warn('getBudgetSummary no devolvió un array:', data);
-      return [];
-    }
-    
-    // Obtener todas las deducciones por objetivos para el mes
-    const goalDeductions = await getAllGoalDeductionsForMonth(userId, month);
-    
-    // Añadir las deducciones por objetivos al resumen del presupuesto
-    const enhancedData = data.map((budget: any) => {
-      const goalDeductionsAmount = goalDeductions[budget.category_id] || 0;
-      const totalDeductions = (budget.fixed_expenses_amount || 0) + goalDeductionsAmount;
+    // Combinar presupuestos con gastos reales
+    const budgetSummary = budgets.map(budget => {
+      const spent = expensesByCategory[budget.category_id] || 0;
+      const remaining = budget.amount - spent;
+      const percentage = budget.amount > 0 ? Math.round((spent / budget.amount) * 100) : 0;
       
       return {
         ...budget,
-        goal_deductions_amount: goalDeductionsAmount,
-        total_deductions: totalDeductions,
-        // Recalcular el disponible considerando todas las deducciones
-        available_amount: budget.amount - totalDeductions,
-        remaining: budget.amount - totalDeductions - (budget.spent || 0)
+        spent,
+        percentage,
+        remaining,
+        isExceeded: spent > budget.amount,
+        available_amount: budget.amount
       };
     });
     
-    return enhancedData;
+    return budgetSummary;
   } catch (error) {
     console.error('Error en getBudgetSummary:', error);
     return [];
