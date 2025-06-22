@@ -3,9 +3,29 @@
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 export default function PublicHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  const handleAuthAction = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    } else {
+      router.push('/login');
+    }
+  };
+
+  const handleRegisterAction = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    } else {
+      router.push('/registro');
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-b border-gray-100">
@@ -46,17 +66,22 @@ export default function PublicHeader() {
           
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <a 
-              href="/login"
-              className="text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium"
-            >
-              Iniciar Sesión
-            </a>
-            <a href="/registro">
-              <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
-                Registrarse Gratis
-              </Button>
-            </a>
+            {!isLoading && (
+              <>
+                <button 
+                  onClick={handleAuthAction}
+                  className="text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium"
+                >
+                  {isAuthenticated ? 'Ir al Dashboard' : 'Iniciar Sesión'}
+                </button>
+                <Button 
+                  onClick={handleRegisterAction}
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                >
+                  {isAuthenticated ? 'Dashboard' : 'Registrarse Gratis'}
+                </Button>
+              </>
+            )}
           </div>
           
           {/* Mobile menu button */}
@@ -98,17 +123,28 @@ export default function PublicHeader() {
             </a>
             
             <div className="pt-4 border-t border-gray-100 space-y-3">
-              <a 
-                href="/login"
-                className="block text-center py-2 text-gray-700 hover:text-blue-600 transition-colors font-medium"
-              >
-                Iniciar Sesión
-              </a>
-              <a href="/registro" className="block">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white">
-                  Registrarse Gratis
-                </Button>
-              </a>
+              {!isLoading && (
+                <>
+                  <button 
+                    onClick={() => {
+                      handleAuthAction();
+                      setIsMenuOpen(false);
+                    }}
+                    className="block w-full text-center py-2 text-gray-700 hover:text-blue-600 transition-colors font-medium"
+                  >
+                    {isAuthenticated ? 'Ir al Dashboard' : 'Iniciar Sesión'}
+                  </button>
+                  <Button 
+                    onClick={() => {
+                      handleRegisterAction();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  >
+                    {isAuthenticated ? 'Dashboard' : 'Registrarse Gratis'}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -3,9 +3,22 @@
 import { MessageCircle, Play, ChevronRight } from 'lucide-react';
 import AnimatedWords from './AnimatedWords';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 export default function HeroSection() {
   const words = ['Gastos', 'Presupuesto', 'Ingresos', 'Inversiones', 'Ahorros'];
+  const { isLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  const handleMainCTA = () => {
+    if (isAuthenticated) {
+      router.push('/dashboard');
+    } else {
+      // WhatsApp para usuarios no autenticados
+      window.open('https://wa.me/5491234567890?text=Hola, quiero probar FinanzApp', '_blank');
+    }
+  };
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-white to-purple-50 pt-16">
@@ -46,35 +59,65 @@ export default function HeroSection() {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            <Button 
-              size="lg" 
-              className="
-                bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700
-                text-white px-8 py-4 text-lg font-semibold rounded-xl
-                transform hover:scale-105 transition-all duration-200
-                shadow-lg hover:shadow-xl
-                flex items-center space-x-3
-              "
-              onClick={() => window.open('https://wa.me/5491234567890?text=Hola, quiero probar FinanzApp', '_blank')}
-            >
-              <MessageCircle size={24} />
-              <span>Probar en WhatsApp</span>
-              <ChevronRight size={20} />
-            </Button>
+            {!isLoading && (
+              <>
+                <Button 
+                  size="lg" 
+                  className="
+                    bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700
+                    text-white px-8 py-4 text-lg font-semibold rounded-xl
+                    transform hover:scale-105 transition-all duration-200
+                    shadow-lg hover:shadow-xl
+                    flex items-center space-x-3
+                  "
+                  onClick={handleMainCTA}
+                >
+                  {isAuthenticated ? (
+                    <>
+                      <ChevronRight size={24} />
+                      <span>Ir al Dashboard</span>
+                      <ChevronRight size={20} />
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle size={24} />
+                      <span>Probar en WhatsApp</span>
+                      <ChevronRight size={20} />
+                    </>
+                  )}
+                </Button>
 
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="
-                border-2 border-gray-300 hover:border-gray-400
-                text-gray-700 px-8 py-4 text-lg font-semibold rounded-xl
-                transform hover:scale-105 transition-all duration-200
-                flex items-center space-x-3
-              "
-            >
-              <Play size={20} />
-              <span>Ver Demo</span>
-            </Button>
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  className="
+                    border-2 border-gray-300 hover:border-gray-400
+                    text-gray-700 px-8 py-4 text-lg font-semibold rounded-xl
+                    transform hover:scale-105 transition-all duration-200
+                    flex items-center space-x-3
+                  "
+                  onClick={() => {
+                    if (isAuthenticated) {
+                      router.push('/perfil');
+                    } else {
+                      router.push('/registro');
+                    }
+                  }}
+                >
+                  {isAuthenticated ? (
+                    <>
+                      <Play size={20} />
+                      <span>Ver Perfil</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={20} />
+                      <span>Comenzar Gratis</span>
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Preview del producto */}

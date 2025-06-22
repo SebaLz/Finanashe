@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
 
 // Función para obtener la sesión actual
 export const getCurrentSession = async () => {
@@ -34,6 +34,27 @@ export const signInWithPassword = async (email: string, password: string) => {
   
   if (error) {
     console.error('Error al iniciar sesión:', error);
+    throw error;
+  }
+  
+  return data;
+};
+
+// Función para iniciar sesión con Google
+export const signInWithGoogle = async (redirectTo?: string) => {
+  const redirectURL = redirectTo 
+    ? `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`
+    : `${window.location.origin}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: redirectURL,
+    }
+  });
+  
+  if (error) {
+    console.error('Error al iniciar sesión con Google:', error);
     throw error;
   }
   

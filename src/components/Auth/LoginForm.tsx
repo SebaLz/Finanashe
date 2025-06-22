@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signInWithPassword } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -13,6 +14,30 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Obtener el parámetro redirectTo de la URL
+  const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+
+  // Verificar si hay errores de OAuth en la URL
+  useEffect(() => {
+    const oauthError = searchParams.get('error');
+    if (oauthError) {
+      switch (oauthError) {
+        case 'oauth_error':
+          setError('Error al conectar con Google. Intenta nuevamente.');
+          break;
+        case 'no_session':
+          setError('No se pudo completar el inicio de sesión con Google.');
+          break;
+        case 'callback_error':
+          setError('Error en el proceso de autenticación. Intenta nuevamente.');
+          break;
+        default:
+          setError('Ocurrió un error durante el inicio de sesión.');
+      }
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,13 +45,20 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      await signInWithPassword(email, password);
-      router.refresh();
-      router.push('/');
+      const result = await signInWithPassword(email, password);
+      console.log(`✅ LOGIN EXITOSO - Session:`, result.session ? 'Exists' : 'Missing');
+      console.log(`✅ LOGIN EXITOSO - User:`, result.user ? result.user.email : 'Missing');
+      console.log(`✅ LOGIN EXITOSO - Redirigiendo a: ${redirectTo}`);
+      
+      // Pequeño delay para asegurar que las cookies se establezcan
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Usar window.location.href para forzar una navegación completa
+      // que incluya las cookies de sesión actualizadas
+      window.location.href = redirectTo;
     } catch (error: any) {
       console.error('Error al iniciar sesión:', error);
       setError(error.message || 'Error al iniciar sesión');
-    } finally {
       setLoading(false);
     }
   };
@@ -179,6 +211,22 @@ export default function LoginForm() {
           </form>
 
           {/* Divider */}
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500 font-medium">o continúa con</span>
+            </div>
+          </div>
+
+          {/* Google Sign In */}
+          <GoogleSignInButton 
+            redirectTo={redirectTo}
+            text="Iniciar sesión con Google"
+          />
+
+          {/* Second Divider */}
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200"></div>

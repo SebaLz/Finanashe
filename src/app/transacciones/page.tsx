@@ -21,7 +21,7 @@ import { Skeleton, TableRowsSkeleton } from '@/components/ui/skeleton';
 const CATEGORIES_UPDATED_EVENT = 'categoriesUpdated';
 
 // Función para emitir evento de actualización de categorías
-export const emitCategoriesUpdated = () => {
+const emitCategoriesUpdated = () => {
   const event = new CustomEvent(CATEGORIES_UPDATED_EVENT);
   window.dispatchEvent(event);
 };

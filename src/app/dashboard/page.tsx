@@ -68,16 +68,11 @@ export default function Dashboard() {
           cargarInversiones(user.id);
           cargarGastosPorCategoria(user.id);
           cargarPresupuestoRestante(user.id);
-        } else {
-          // Si no hay usuario, redirigir al login
-          window.location.href = '/login';
-          return;
         }
+        // NOTA: El middleware ya maneja la redirección, no necesitamos verificar aquí
       } catch (error) {
         console.error('Error cargando usuario:', error);
-        // En caso de error, redirigir al login
-        window.location.href = '/login';
-        return;
+        // El middleware ya maneja los casos de error de autenticación
       } finally {
         setLoadingUser(false);
         

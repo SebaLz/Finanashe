@@ -7,15 +7,14 @@ import { Button } from '@/components/ui/button';
 import { 
   Tabs, TabsContent, TabsList, TabsTrigger 
 } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/formatters';
-import { toast } from '@/components/ui/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   getBudgetGoalLinks, 
   createBudgetGoalLink, 
@@ -63,6 +62,8 @@ export function ManageBudgetLinks({
   userId, 
   onUpdate 
 }: ManageBudgetLinksProps) {
+  const { toast } = useToast();
+  
   // Estado para los datos
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -429,30 +430,18 @@ export function ManageBudgetLinks({
                       
                       <div className="grid gap-3">
                         <div className="space-y-1">
-                          <Label htmlFor="goal-select">Objetivo</Label>
                           <Select
+                            label="Objetivo"
+                            options={
+                              goals.length === 0 
+                                ? [{ value: '', label: 'No hay objetivos disponibles' }]
+                                : goals
+                                    .filter(goal => !goalLinks.some(link => link.goal_id === goal.id))
+                                    .map(goal => ({ value: goal.id, label: goal.name }))
+                            }
                             value={newGoalLink.goalId}
-                            onValueChange={(value) => setNewGoalLink(prev => ({ ...prev, goalId: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un objetivo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {goals.length === 0 ? (
-                                <SelectItem value="no-goals" disabled>
-                                  No hay objetivos disponibles
-                                </SelectItem>
-                              ) : (
-                                goals
-                                  .filter(goal => !goalLinks.some(link => link.goal_id === goal.id))
-                                  .map(goal => (
-                                    <SelectItem key={goal.id} value={goal.id}>
-                                      {goal.name}
-                                    </SelectItem>
-                                  ))
-                              )}
-                            </SelectContent>
-                          </Select>
+                            onChange={(value) => setNewGoalLink(prev => ({ ...prev, goalId: value }))}
+                          />
                         </div>
                         
                         <div className="space-y-1">
@@ -569,8 +558,8 @@ export function ManageBudgetLinks({
                               </div>
                               
                               <Button
-                                variant="destructive"
-                                size="icon"
+                                variant="danger"
+                                size="sm"
                                 onClick={() => deleteLink(link.id)}
                                 disabled={saving}
                               >

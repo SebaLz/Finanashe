@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/admin-supabase';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '@/lib/supabase';
 
@@ -11,14 +11,35 @@ export async function POST(request: NextRequest) {
     console.log('URL de la solicitud:', requestUrl.toString());
     console.log('Cookies presentes:', request.headers.get('cookie') ? 'Sí' : 'No');
 
-    // Usar el cliente de Supabase con cookies para obtener la sesión
-    const cookieStore = cookies();
-    console.log('Cookies disponibles:', cookieStore.getAll().map(c => c.name));
+    // MIGRACIÓN: Patrón moderno de manejo de cookies con @supabase/ssr
+    // Solo usar getAll() y setAll() como recomienda la nueva versión
+    const cookieStore = await cookies();
+    console.log('Cookies disponibles:', cookieStore.getAll().map((c: any) => c.name));
     
-    // Crear cliente con tipado correcto
-    const supabaseAuth = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore 
-    });
+    // MIGRACIÓN: Reemplazado createRouteHandlerClient con createServerClient
+    // El nuevo patrón requiere configurar cookies.getAll y cookies.setAll
+    const supabaseAuth = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              });
+            } catch (error) {
+              // Las cookies setAll pueden fallar en algunos contextos de API routes
+              // Esto es esperado y no rompe la funcionalidad
+              console.warn('No se pudieron establecer todas las cookies:', error);
+            }
+          },
+        },
+      }
+    );
     
     console.log('Verificando sesión de usuario...');
     const { data: sessionData, error: sessionError } = await supabaseAuth.auth.getSession();
@@ -33,13 +54,18 @@ export async function POST(request: NextRequest) {
     
     if (!sessionData.session) {
       console.error('No se encontró sesión de usuario');
-      console.log('Cookies disponibles:', cookieStore.getAll().map(c => `${c.name}=${c.value.substring(0, 10)}...`));
+      console.log('Cookies disponibles:', cookieStore.getAll().map((c: any) => `${c.name}=${c.value.substring(0, 10)}...`));
       
-      const authCookie = cookieStore.get('sb-auth-token');
-      if (!authCookie) {
-        console.error('No se encontró cookie de autenticación');
+      // MIGRACIÓN: Mantenido el logging pero adaptado para el nuevo cliente
+      // Las cookies de autenticación pueden tener nombres diferentes con @supabase/ssr
+      const authCookies = cookieStore.getAll().filter((c: any) => 
+        c.name.includes('supabase') || c.name.includes('sb-')
+      );
+      if (authCookies.length === 0) {
+        console.error('No se encontraron cookies de autenticación de Supabase');
       } else {
-        console.log('Cookie de autenticación presente pero sesión no válida');
+        console.log('Cookies de autenticación presentes pero sesión no válida:', 
+          authCookies.map((c: any) => c.name));
       }
       
       return NextResponse.json(
