@@ -9,6 +9,14 @@ export type UserProfile = {
   name?: string;
   phone?: string;
   whatsapp?: string;
+  country?: string;
+  preferred_currency?: string;
+  notification_preferences?: {
+    daily_summary: boolean;
+    budget_alerts: boolean;
+    goal_reminders: boolean;
+    transaction_alerts: boolean;
+  };
 };
 
 export async function signUp(credentials: UserCredentials, profile?: UserProfile) {
@@ -117,9 +125,18 @@ export async function getUserProfile(userId: string) {
 }
 
 export async function updateUserProfile(userId: string, profile: Partial<UserProfile>) {
+  // Filtrar solo los campos que existen en la tabla users
+  const allowedFields = ['name', 'phone', 'whatsapp', 'country', 'preferred_currency', 'notification_preferences'];
+  const filteredProfile = Object.keys(profile)
+    .filter(key => allowedFields.includes(key))
+    .reduce((obj, key) => {
+      obj[key] = profile[key as keyof UserProfile];
+      return obj;
+    }, {} as any);
+
   const { data, error } = await supabase
     .from('users')
-    .update(profile)
+    .update(filteredProfile)
     .eq('id', userId)
     .select();
 

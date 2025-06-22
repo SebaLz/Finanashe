@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import AppShell from './AppShell';
+import { AppShell } from './AppShell';
 
 interface ConditionalLayoutProps {
   children: React.ReactNode;
