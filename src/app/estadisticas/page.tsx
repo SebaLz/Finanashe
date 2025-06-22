@@ -22,6 +22,7 @@ import { useUser } from '@/hooks/useUser';
 import { getTransactions, getTransactionsByCategory, getMonthlyTotals } from '@/services/transactions';
 import { getCategories } from '@/services/categories';
 import { format, subMonths, startOfMonth, endOfMonth, subQuarters, subYears } from 'date-fns';
+import { PageContainer } from '@/components/layout/page-container';
 
 ChartJS.register(
   CategoryScale,
@@ -108,13 +109,26 @@ export default function EstadisticasPage() {
         
         const expensesByCategory: Record<string, {amount: number, color: string}> = {};
         
-        categoryTransactions.forEach(tx => {
-          if (tx.type === 'expense' && tx.categories) {
-            const catName = tx.categories.name;
-            if (!expensesByCategory[catName]) {
-              expensesByCategory[catName] = { amount: 0, color: tx.categories.color || '#3B82F6' };
+        categoryTransactions.forEach(categoryGroup => {
+          // categoryGroup tiene la estructura { category, transactions, total }
+          if (categoryGroup.category && categoryGroup.transactions) {
+            // Filtrar solo transacciones de tipo 'expense'
+            const expenseTransactions = categoryGroup.transactions.filter(tx => tx.type === 'expense');
+            
+            if (expenseTransactions.length > 0) {
+              const category = categoryGroup.category;
+              const catName = category.emoji 
+                ? `${category.emoji} ${category.name}` 
+                : category.name;
+              
+              if (!expensesByCategory[catName]) {
+                expensesByCategory[catName] = { amount: 0, color: category.color || '#3B82F6' };
+              }
+              
+              // Sumar todos los gastos de esta categoría
+              const totalExpenses = expenseTransactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+              expensesByCategory[catName].amount += totalExpenses;
             }
-            expensesByCategory[catName].amount += tx.amount;
           }
         });
         
@@ -136,11 +150,15 @@ export default function EstadisticasPage() {
         let ingresoTotal = 0;
         let gastoTotal = 0;
         
-        categoryTransactions.forEach(tx => {
-          if (tx.type === 'income') {
-            ingresoTotal += tx.amount;
-          } else {
-            gastoTotal += tx.amount;
+        categoryTransactions.forEach(categoryGroup => {
+          if (categoryGroup.transactions) {
+            categoryGroup.transactions.forEach(tx => {
+              if (tx.type === 'income') {
+                ingresoTotal += parseFloat(tx.amount);
+              } else {
+                gastoTotal += parseFloat(tx.amount);
+              }
+            });
           }
         });
         
@@ -289,14 +307,15 @@ export default function EstadisticasPage() {
   };
 
   return (
-    <div className="flex flex-col space-y-6">
+    <PageContainer>
+      <div className="flex flex-col space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Estadísticas Financieras</h1>
         <div className="flex items-center space-x-2">
           <Select
             options={periodos}
             value={periodo}
-            onChange={(e) => setPeriodo(e.target.value)}
+            onChange={(value) => setPeriodo(value)}
             className="w-48"
           />
         </div>
@@ -442,6 +461,7 @@ export default function EstadisticasPage() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 } 

@@ -16,6 +16,7 @@ export type Transaction = {
     name: string;
     color: string;
     icon: string | null;
+    emoji?: string | null;
     is_system?: boolean;
     is_default?: boolean;
   };
@@ -291,6 +292,7 @@ export async function getTransactionsByCategory(userId: string, startDate: strin
           name,
           color,
           icon,
+          emoji,
           is_system,
           is_default
         )
@@ -319,6 +321,7 @@ export async function getTransactionsByCategory(userId: string, startDate: strin
         name: 'Sin categoría',
         color: '#9E9E9E',
         icon: 'help-circle',
+        emoji: '📊',
         is_system: true,
         is_default: true
       };
@@ -433,6 +436,7 @@ export async function getTransactionsByMonth(userId: string, month: string, type
           name,
           color,
           icon,
+          emoji,
           is_system,
           is_default
         )

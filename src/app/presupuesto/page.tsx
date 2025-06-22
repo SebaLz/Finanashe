@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { getGoalsForBudget, BudgetGoalLinkWithDetails, processAutomaticContributions } from '@/services/budget-goals';
 import { ManageBudgetLinks } from './components/ManageBudgetLinks';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function PresupuestoPage() {
   const router = useRouter();
@@ -1089,7 +1090,8 @@ export default function PresupuestoPage() {
   };
 
   return (
-    <div className="container max-w-7xl mx-auto px-4 py-8">
+    <PageContainer maxWidth="2xl" padding="lg">
+      <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Presupuesto Mensual</h1>
         
@@ -1430,10 +1432,14 @@ export default function PresupuestoPage() {
                     onClick={() => handleAddCategoryToBudget(category)}
                     className="w-full flex items-center p-3 border border-gray-100 dark:border-gray-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-left"
                   >
-                    <div 
-                      className="w-6 h-6 rounded-full mr-3 flex-shrink-0 shadow-sm dark:shadow-md"
-                      style={{ backgroundColor: category.color }}
-                    ></div>
+                    {category.emoji ? (
+                      <span className="text-xl mr-3 flex-shrink-0">{category.emoji}</span>
+                    ) : (
+                      <div 
+                        className="w-6 h-6 rounded-full mr-3 flex-shrink-0 shadow-sm dark:shadow-md"
+                        style={{ backgroundColor: category.color }}
+                      ></div>
+                    )}
                     <div className="flex-1">
                       <span className="font-medium text-gray-800 dark:text-gray-200">{category.name}</span>
                       <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1582,6 +1588,7 @@ export default function PresupuestoPage() {
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </PageContainer>
   );
 }

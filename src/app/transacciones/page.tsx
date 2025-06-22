@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectOption } from '@/components/ui/select';
 import { PlusCircle, Search, ArrowDownCircle, ArrowUpCircle, Filter, RefreshCw, ChevronDown, ArrowLeft, ArrowRight, Check, ToggleLeft, ToggleRight, BadgeDollarSign, BadgePercent, BarChart4 } from 'lucide-react';
 import { getTransactions, Transaction, createTransaction, updateTransaction } from '@/services/transactions';
-import { getCategories, getCategoriesByType, Category } from '@/services/categories';
+import { getCategories, getCategoriesByType, getCategoriesByTypeEnhanced, Category } from '@/services/categories';
 import { getCurrentUser } from '@/services/auth';
 import { format, parse, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -16,6 +16,7 @@ import { ExportData } from '@/components/ui/export-data';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton, TableRowsSkeleton } from '@/components/ui/skeleton';
+import { PageContainer } from '@/components/layout/page-container';
 
 // Crear un evento personalizado para actualización de categorías
 const CATEGORIES_UPDATED_EVENT = 'categoriesUpdated';
@@ -76,7 +77,10 @@ const TransactionRow = memo(({
         </div>
       </td>
       <td className="px-4 py-4">
-        <span className="inline-flex px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+        <span className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+          {transaction.categories?.emoji && (
+            <span className="mr-1.5 text-sm">{transaction.categories.emoji}</span>
+          )}
           {transaction.categories?.name || 'Sin categoría'}
         </span>
       </td>
@@ -216,7 +220,7 @@ export default function TransaccionesPage() {
   // Agregar estado para la opción de incluir en presupuesto
   const [isBudgetable, setIsBudgetable] = useState(false);
 
-  // Cargar datos cuando cambia el usuario
+  // Cargar categorías cuando cambia el usuario o el tipo
   useEffect(() => {
     const cargarDatos = async () => {
       if (!userId) return;
@@ -224,17 +228,22 @@ export default function TransaccionesPage() {
       try {
         setRefreshingCategories(true);
         
+        // Limpiar categoría seleccionada al cambiar de tipo
+        setCategoriaId('');
+        
         // Cargar categorías según el tipo de transacción seleccionado
-        const categoriasData = await getCategoriesByType(userId, tipo);
+        const categoriasData = await getCategoriesByTypeEnhanced(userId, tipo);
+        console.log(`🔄 Cargando categorías para tipo: ${tipo}`, categoriasData);
         
         // Convertir a SelectOption
         const opcionesCategorias = categoriasData.map((cat: Category) => ({
           value: cat.id,
-          label: cat.name,
-          extra: { color: cat.color, icon: cat.icon }
+          label: cat.emoji ? `${cat.emoji} ${cat.name}` : cat.name,
+          extra: { color: cat.color, icon: cat.icon, emoji: cat.emoji }
         }));
 
         setCategorias(opcionesCategorias);
+        console.log(`✅ Categorías ${tipo} cargadas:`, opcionesCategorias.length);
       } catch (err) {
         console.error('Error cargando categorías:', err);
       } finally {
@@ -245,7 +254,7 @@ export default function TransaccionesPage() {
     cargarDatos();
   }, [userId, tipo]);
 
-  // Cargar transacciones y categorías
+  // Cargar transacciones y usuario inicial
   useEffect(() => {
     const obtenerDatos = async () => {
       setLoading(true);
@@ -257,15 +266,6 @@ export default function TransaccionesPage() {
           // Cargar transacciones
           const transaccionesData = await getTransactions(user.id);
           setTransacciones(transaccionesData);
-          
-          // Cargar categorías iniciales según tipo seleccionado
-          const categoriasData = await getCategoriesByType(user.id, tipo);
-          const opcionesCategorias = categoriasData.map((cat: Category) => ({
-            value: cat.id,
-            label: cat.name,
-            extra: { color: cat.color, icon: cat.icon }
-          }));
-          setCategorias(opcionesCategorias);
         }
       } catch (error) {
         console.error('Error cargando datos:', error);
@@ -275,7 +275,7 @@ export default function TransaccionesPage() {
     };
     
     obtenerDatos();
-  }, [tipo]);
+  }, []); // Solo ejecutar una vez al montar el componente
 
   // Detectar cambios de pestaña para recargar datos
   useEffect(() => {
@@ -397,13 +397,13 @@ export default function TransaccionesPage() {
       setRefreshingCategories(true);
       
       // Cargar categorías según el tipo seleccionado
-      const categoriasData = await getCategoriesByType(userId, tipo);
+      const categoriasData = await getCategoriesByTypeEnhanced(userId, tipo);
       
       // Convertir a SelectOption
       const opcionesCategorias = categoriasData.map((cat: Category) => ({
         value: cat.id,
-        label: cat.name,
-        extra: { color: cat.color, icon: cat.icon }
+        label: cat.emoji ? `${cat.emoji} ${cat.name}` : cat.name,
+        extra: { color: cat.color, icon: cat.icon, emoji: cat.emoji }
       }));
 
       setCategorias(opcionesCategorias);
@@ -414,11 +414,7 @@ export default function TransaccionesPage() {
         setCategoriaId('');
       }
 
-      toast({
-        title: "Categorías actualizadas",
-        description: "La lista de categorías ha sido actualizada",
-        variant: "default",
-      });
+      // Toast eliminado - cambio de categorías es automático y silencioso
     } catch (err) {
       console.error('Error recargando categorías:', err);
     } finally {
@@ -454,7 +450,8 @@ export default function TransaccionesPage() {
   };
 
   return (
-    <div className="flex flex-col space-y-5">
+    <PageContainer>
+      <div className="flex flex-col space-y-5">
       {/* Notificaciones */}
       <div className="fixed top-4 right-4 z-50 flex flex-col space-y-2">
         {notifications.map(notification => (
@@ -650,36 +647,48 @@ export default function TransaccionesPage() {
                       <div className="flex items-center justify-between mb-2">
                         <label className="block text-sm font-medium">Tipo de transacción</label>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          className={`flex items-center justify-center px-3 py-4 rounded-lg border ${
+                          className={`flex items-center justify-center px-4 py-5 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
                             tipo === 'income'
-                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
-                              : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                              ? 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 shadow-md ring-2 ring-green-200 dark:ring-green-800'
+                              : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-200 dark:hover:border-green-700'
                           }`}
                           onClick={() => {
                             setTipo('income');
-                            handleRefreshCategories(); // Recargar categorías al cambiar tipo
+                            setCategoriaId(''); // Limpiar categoría seleccionada
+                            handleRefreshCategories();
                           }}
                         >
-                          <ArrowUpCircle className={`h-5 w-5 mr-2 ${tipo === 'income' ? 'text-green-500' : 'text-gray-400'}`} />
-                          <span className="font-medium text-sm">Ingreso</span>
+                          <div className={`p-2 rounded-lg mr-3 ${tipo === 'income' ? 'bg-green-200 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                            <ArrowUpCircle className={`h-6 w-6 ${tipo === 'income' ? 'text-green-600 dark:text-green-300' : 'text-gray-500'}`} />
+                          </div>
+                          <div className="text-left">
+                            <div className="font-semibold text-base">Ingreso</div>
+                            <div className="text-xs opacity-80">Dinero que recibes</div>
+                          </div>
                         </button>
                         <button
                           type="button"
-                          className={`flex items-center justify-center px-3 py-4 rounded-lg border ${
+                          className={`flex items-center justify-center px-4 py-5 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
                             tipo === 'expense'
-                              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
-                              : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                              ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 shadow-md ring-2 ring-red-200 dark:ring-red-800'
+                              : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-700'
                           }`}
                           onClick={() => {
                             setTipo('expense');
-                            handleRefreshCategories(); // Recargar categorías al cambiar tipo
+                            setCategoriaId(''); // Limpiar categoría seleccionada
+                            handleRefreshCategories();
                           }}
                         >
-                          <ArrowDownCircle className={`h-5 w-5 mr-2 ${tipo === 'expense' ? 'text-red-500' : 'text-gray-400'}`} />
-                          <span className="font-medium text-sm">Gasto</span>
+                          <div className={`p-2 rounded-lg mr-3 ${tipo === 'expense' ? 'bg-red-200 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                            <ArrowDownCircle className={`h-6 w-6 ${tipo === 'expense' ? 'text-red-600 dark:text-red-300' : 'text-gray-500'}`} />
+                          </div>
+                          <div className="text-left">
+                            <div className="font-semibold text-base">Gasto</div>
+                            <div className="text-xs opacity-80">Dinero que gastas</div>
+                          </div>
                         </button>
                       </div>
                     </div>
@@ -769,23 +778,34 @@ export default function TransaccionesPage() {
                       )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-4">
                       <Button 
                         type="submit" 
-                        className={`w-full flex items-center justify-center h-14 text-base ${
-                          tipo === 'income' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
+                        className={`w-full flex items-center justify-center h-16 text-base font-semibold rounded-xl shadow-lg transition-all duration-200 hover:scale-105 ${
+                          tipo === 'income' 
+                            ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white' 
+                            : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
+                        } ${formLoading ? 'opacity-80 cursor-wait' : ''}`}
                         disabled={formLoading}
                       >
                         {formLoading ? (
                           <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Guardando...
+                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
+                            <span className="text-lg">Guardando...</span>
                           </>
                         ) : (
                           <>
-                            <PlusCircle className="mr-2" size={20} />
-                            {tipo === 'income' ? 'Registrar Ingreso' : 'Registrar Gasto'}
+                            <div className="p-2 bg-white/20 rounded-lg mr-3">
+                              <PlusCircle className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="text-left">
+                              <div className="text-lg font-bold">
+                                {tipo === 'income' ? 'Registrar Ingreso' : 'Registrar Gasto'}
+                              </div>
+                              <div className="text-xs opacity-90">
+                                {monto ? `$${parseFloat(monto).toLocaleString()}` : 'Agrega el monto'}
+                              </div>
+                            </div>
                           </>
                         )}
                       </Button>
@@ -828,5 +848,6 @@ export default function TransaccionesPage() {
         )}
       </div>
     </div>
+    </PageContainer>
   );
 } 

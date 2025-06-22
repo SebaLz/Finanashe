@@ -29,6 +29,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Modal } from '@/components/ui/modal';
 import { Tabs } from '@/components/ui/tabs';
+import { PageContainer } from '@/components/layout/page-container';
 
 type Category = {
   id: string;
@@ -391,7 +392,7 @@ export default function ObjetivosPage() {
   function getCategoryName(categoryId: string | null | undefined) {
     if (!categoryId) return 'Sin categoría';
     const category = categorias.find(cat => cat.id === categoryId);
-    return category ? category.name : 'Sin categoría';
+    return category ? ((category as any).emoji ? `${(category as any).emoji} ${category.name}` : category.name) : 'Sin categoría';
   }
 
   // Función para generar tareas mensuales a partir de objetivos
@@ -419,7 +420,8 @@ export default function ObjetivosPage() {
   }
 
   return (
-    <div className="flex flex-col space-y-6">
+    <PageContainer>
+      <div className="flex flex-col space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Objetivos de Ahorro</h1>
         <div className="flex gap-2">
@@ -664,7 +666,7 @@ export default function ObjetivosPage() {
                   id="category_id"
                   options={categorias.map(cat => ({
                     value: cat.id,
-                    label: cat.name
+                    label: (cat as any).emoji ? `${(cat as any).emoji} ${cat.name}` : cat.name
                   }))}
                   value={formData.category_id}
                   onChange={(value) => handleInputChange(value, 'category_id')}
@@ -944,6 +946,7 @@ export default function ObjetivosPage() {
           </div>
         )}
       </Modal>
-    </div>
+      </div>
+    </PageContainer>
   );
 }

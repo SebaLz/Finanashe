@@ -27,12 +27,14 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger, DialogTitle } from 
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
+import { PageContainer } from '@/components/layout/page-container';
 
 type Category = {
   id: string;
   name: string;
   color: string;
   icon: string | null;
+  emoji?: string | null;
 };
 
 // Definir el tipo ButtonVariant
@@ -372,7 +374,7 @@ export default function GastosFijosPage() {
   }
 
   return (
-    <>
+    <PageContainer>
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
         <div className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Gastos Fijos Recurrentes</h1>
@@ -438,7 +440,7 @@ export default function GastosFijosPage() {
                         onChange={(value) => setFormData({...formData, category_id: value})}
                         options={categories.map(cat => ({ 
                           value: cat.id, 
-                          label: cat.name
+                          label: cat.emoji ? `${cat.emoji} ${cat.name}` : cat.name
                         }))}
                         className="z-[100] !mb-0"
                       />
@@ -717,7 +719,7 @@ export default function GastosFijosPage() {
                 name="category_id"
                 value={formData.category_id}
                 onChange={(value) => handleInputChange(value, 'category_id')}
-                options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
+                                      options={categories.map(cat => ({ value: cat.id, label: (cat as any).emoji ? `${(cat as any).emoji} ${cat.name}` : cat.name }))}
                 placeholder="Selecciona una categoría"
                 className="h-10 bg-white dark:bg-gray-900"
               />
@@ -988,6 +990,6 @@ export default function GastosFijosPage() {
           </div>
         </div>
       </Modal>
-    </>
+    </PageContainer>
   );
 } 

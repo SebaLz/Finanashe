@@ -28,6 +28,7 @@ import {
 import { getAllCategories } from '@/services/categories';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function InversionesPage() {
   const [loading, setLoading] = useState(true);
@@ -271,11 +272,12 @@ export default function InversionesPage() {
     return inversion.quantity * inversion.purchase_price * variacion;
   };
 
-  return (
-    <div className="flex flex-col space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Inversiones</h1>
-      </div>
+    return (
+    <PageContainer>
+      <div className="flex flex-col space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Inversiones</h1>
+        </div>
 
       {loading ? (
         <div className="flex justify-center py-10">
@@ -359,7 +361,7 @@ export default function InversionesPage() {
                         onChange={setSelectedCategoryId}
                         options={categorias.map((cat) => ({
                           value: cat.id,
-                          label: cat.name
+                          label: (cat as any).emoji ? `${(cat as any).emoji} ${cat.name}` : cat.name
                         }))}
                         placeholder="Selecciona una categoría"
                       />
@@ -611,6 +613,7 @@ export default function InversionesPage() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 } 

@@ -1,17 +1,30 @@
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
+export type CategoryType = 'income' | 'expense' | 'transfer' | 'investment' | 'saving' | 'goal';
+export type CategoryContext = 'personal' | 'business';
+
 export type Category = {
   id: string;
   user_id: string | null;
   name: string;
   color: string;
   icon: string | null;
+  emoji?: string | null; // Nuevo campo para emojis estilo Gasti
+  type?: CategoryType; // Nuevo campo tipado
+  parent_category_id?: string | null; // Para subcategorías
+  sort_order?: number; // Orden personalizable
+  description?: string | null; // Descripción opcional
   is_default?: boolean;
   is_system?: boolean;
+  is_budgetable?: boolean; // Nuevo campo para presupuestos
+  context?: CategoryContext; // Contexto de uso
   created_at?: string;
   is_visible?: boolean;  // Campo virtual para indicar visibilidad
-  type?: 'income' | 'expense' | 'saving' | 'goal' | 'investment' | 'budget';
+  // Campos de visibilidad específicos
+  visible_in_transactions?: boolean;
+  visible_in_budgets?: boolean;
+  visible_in_reports?: boolean;
 };
 
 export type CategoryVisibility = {
@@ -19,7 +32,9 @@ export type CategoryVisibility = {
   user_id: string;
   category_id: string;
   is_visible: boolean;
-  visible_in_budget: boolean; // Nuevo campo para controlar la visibilidad en presupuesto
+  visible_in_budgets: boolean; // Campo existente
+  visible_in_transactions?: boolean; // Nuevos campos
+  visible_in_reports?: boolean;
   created_at?: string;
 };
 
@@ -27,7 +42,7 @@ export type CategoryInput = Omit<Category, 'id' | 'created_at'>;
 
 export type CategoryWithVisibility = Category & {
   is_visible: boolean;
-  type: 'income' | 'expense' | 'saving' | 'goal' | 'investment';
+  type: CategoryType;
 };
 
 export async function getCategories(userId: string) {
@@ -327,7 +342,7 @@ export async function setCategoryVisibility(userId: string, categoryId: string, 
     // 1. Verificar si ya existe un registro de visibilidad para esta categoría
     const { data: existingSettings, error: checkError } = await supabase
       .from('category_visibility')
-      .select('id, visible_in_budget')
+      .select('id, visible_in_budgets')
       .eq('user_id', userId)
       .eq('category_id', categoryId);
 
@@ -336,7 +351,7 @@ export async function setCategoryVisibility(userId: string, categoryId: string, 
       throw new Error('No se pudo verificar la configuración de visibilidad de la categoría');
     }
 
-    // 2. Si existe, actualizar el registro manteniendo el valor de visible_in_budget
+    // 2. Si existe, actualizar el registro manteniendo el valor de visible_in_budgets
     if (existingSettings && existingSettings.length > 0) {
       const { data, error } = await supabase
         .from('category_visibility')
@@ -361,7 +376,7 @@ export async function setCategoryVisibility(userId: string, categoryId: string, 
           user_id: userId,
           category_id: categoryId,
           is_visible: isVisible,
-          visible_in_budget: isVisible, // Inicialmente, ambos valores son iguales
+          visible_in_budgets: isVisible, // Inicialmente, ambos valores son iguales
           created_at: new Date().toISOString()
         })
         .select();
@@ -400,7 +415,7 @@ export async function setCategoryBudgetVisibility(userId: string, categoryId: st
     if (existingSettings && existingSettings.length > 0) {
       const { data, error } = await supabase
         .from('category_visibility')
-        .update({ visible_in_budget: visibleInBudget })
+        .update({ visible_in_budgets: visibleInBudget })
         .eq('user_id', userId)
         .eq('category_id', categoryId)
         .select();
@@ -421,7 +436,7 @@ export async function setCategoryBudgetVisibility(userId: string, categoryId: st
           user_id: userId,
           category_id: categoryId,
           is_visible: true, // Por defecto visible en transacciones
-          visible_in_budget: visibleInBudget,
+          visible_in_budgets: visibleInBudget,
           created_at: new Date().toISOString()
         })
         .select();
@@ -836,4 +851,49 @@ export async function setMultipleCategoriesAsBudgetType(userId: string, category
   }
   
   return { results, errors };
+}
+
+// Función moderna para obtener categorías por sección
+export async function getCategoriesForSection(userId: string, section: 'transactions' | 'budgets' | 'goals' | 'investments') {
+  try {
+    const { data, error } = await supabase.rpc('get_categories_for_section', {
+      p_user_id: userId,
+      p_section: section
+    });
+
+    if (error) {
+      console.error('Error fetching categories for section:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Exception in getCategoriesForSection:', error);
+    return [];
+  }
+}
+
+// Función mejorada para obtener categorías por tipo
+export async function getCategoriesByTypeEnhanced(
+  userId: string, 
+  type?: CategoryType, 
+  context: CategoryContext = 'personal'
+) {
+  try {
+    const { data, error } = await supabase.rpc('get_categories_by_type_enhanced', {
+      p_user_id: userId,
+      p_type: type || null,
+      p_context: context
+    });
+
+    if (error) {
+      console.error('Error fetching categories by type enhanced:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Exception in getCategoriesByTypeEnhanced:', error);
+    return [];
+  }
 } 

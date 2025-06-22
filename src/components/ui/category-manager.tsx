@@ -22,18 +22,18 @@ import {
   EyeOff, 
   Eye, 
   Filter,
-  Check,
-  Power,
-  PowerOff,
-  Palette,
-  Tag,
-  Settings,
+  Search,
   LayoutGrid,
-  Loader2
+  Loader2,
+  Trash2,
+  Settings,
+  Grid3X3,
+  List,
+  Hash
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 import { Badge } from './badge';
-import { Skeleton, TableRowsSkeleton } from './skeleton';
+import { Skeleton } from './skeleton';
 import { Select, SelectOption } from '@/components/ui/select';
 
 export type CategoryWithVisibility = {
@@ -42,6 +42,7 @@ export type CategoryWithVisibility = {
   name: string;
   color: string;
   icon: string | null;
+  emoji?: string | null;
   is_system?: boolean;
   is_visible?: boolean;
   visible_in_budget?: boolean;
@@ -59,17 +60,20 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
     name: '', 
     color: '#3B82F6', 
     icon: 'tag',
-    type: 'expense' 
+    type: 'expense'
   });
   const [editForm, setEditForm] = useState({ 
     name: '', 
     color: '', 
     icon: '',
-    type: '' 
+    type: 'expense'
   });
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('custom');
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
 
   // Función para notificar cambios en categorías
   const notifyChanges = useCallback(() => {
@@ -79,39 +83,57 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
   }, [onCategoriesChanged]);
 
   // Cargar categorías
-  useEffect(() => {
-    const loadCategories = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        const data = await getAllCategories(user.id);
-        
-        // Separar categorías personalizadas y del sistema
-        const custom = data.filter(cat => !cat.is_system);
-        const defaults = data.filter(cat => cat.is_system);
-        
-        setCustomCategories(custom);
-        setDefaultCategories(defaults);
-      } catch (err) {
-        console.error('Error cargando categorías:', err);
-        setError('No se pudieron cargar las categorías');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadCategories = async () => {
+    if (!user) return;
     
+    try {
+      setLoading(true);
+      const data = await getAllCategories(user.id);
+      
+      // Separar categorías personalizadas y del sistema
+      const custom = data.filter(cat => !cat.is_system);
+      const defaults = data.filter(cat => cat.is_system);
+      
+      setCustomCategories(custom);
+      setDefaultCategories(defaults);
+    } catch (err) {
+      console.error('Error cargando categorías:', err);
+      setError('No se pudieron cargar las categorías');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadCategories();
   }, [user]);
 
   // Opciones para el campo type
   const typeOptions: SelectOption[] = [
-    { value: 'income', label: 'Ingreso' },
-    { value: 'expense', label: 'Gasto' },
-    { value: 'saving', label: 'Ahorro' },
-    { value: 'goal', label: 'Objetivo' },
-    { value: 'investment', label: 'Inversión' }
+    { value: 'income', label: '💰 Ingreso' },
+    { value: 'expense', label: '💸 Gasto' },
+    { value: 'saving', label: '🐷 Ahorro' },
+    { value: 'goal', label: '🎯 Objetivo' },
+    { value: 'investment', label: '📈 Inversión' }
   ];
+
+  const typeFilterOptions: SelectOption[] = [
+    { value: 'all', label: 'Todos los tipos' },
+    ...typeOptions
+  ];
+
+  // Filtrar categorías
+  const filteredCategories = useCallback(() => {
+    const allCategories = activeTab === 'custom' ? customCategories :
+                          activeTab === 'system' ? defaultCategories :
+                          [...customCategories, ...defaultCategories];
+
+    return allCategories.filter(cat => {
+      const matchesSearch = cat.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = typeFilter === 'all' || cat.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [customCategories, defaultCategories, activeTab, searchTerm, typeFilter]);
 
   const handleCreateCategory = async () => {
     if (!user) return;
@@ -129,7 +151,7 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
         name: newCategory.name,
         color: newCategory.color,
         icon: newCategory.icon,
-        type: newCategory.type
+        type: newCategory.type as any
       });
       
       setNewCategory({ 
@@ -141,7 +163,7 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
       setShowForm(false);
       
       // Recargar categorías
-      loadCategories();
+      await loadCategories();
       
       // Notificar cambios
       notifyChanges();
@@ -169,14 +191,14 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
         name: editForm.name,
         color: editForm.color,
         icon: editForm.icon,
-        type: editForm.type
+        type: editForm.type as any
       });
       
       setEditingId(null);
-      setEditForm({ name: '', color: '', icon: '', type: '' });
+      setEditForm({ name: '', color: '', icon: '', type: 'expense' });
       
       // Recargar categorías
-      loadCategories();
+      await loadCategories();
       
       // Notificar cambios
       notifyChanges();
@@ -198,13 +220,11 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
     });
   };
 
-  // Eliminar categoría o cambiar visibilidad
   const handleToggleVisibility = async (category: CategoryWithVisibility) => {
     if (!user) return;
     
     try {
       setLoading(true);
-      // Cambiar visibilidad
       const newVisibility = !(category.is_visible ?? true);
       await setCategoryVisibility(user.id, category.id, newVisibility);
       
@@ -220,8 +240,6 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
       }
       
       setError(null);
-      
-      // Notificar cambios
       notifyChanges();
     } catch (err) {
       console.error('Error cambiando visibilidad:', err);
@@ -231,13 +249,11 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
     }
   };
 
-  // Cambiar visibilidad en presupuesto
   const handleToggleBudgetVisibility = async (category: CategoryWithVisibility) => {
     if (!user) return;
     
     try {
       setLoading(true);
-      // Cambiar visibilidad en presupuesto
       const newBudgetVisibility = !(category.visible_in_budget ?? true);
       await setCategoryBudgetVisibility(user.id, category.id, newBudgetVisibility);
       
@@ -253,8 +269,6 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
       }
       
       setError(null);
-      
-      // Notificar cambios
       notifyChanges();
     } catch (err) {
       console.error('Error cambiando visibilidad en presupuesto:', err);
@@ -264,101 +278,376 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
     }
   };
 
-  const iconOptions = [
-    { value: 'tag', label: 'Etiqueta' },
-    { value: 'shopping-cart', label: 'Compras' },
-    { value: 'home', label: 'Hogar' },
-    { value: 'car', label: 'Transporte' },
-    { value: 'heart', label: 'Salud' },
-    { value: 'film', label: 'Entretenimiento' },
-    { value: 'book', label: 'Educación' },
-    { value: 'briefcase', label: 'Trabajo' },
-    { value: 'coffee', label: 'Comida' },
-    { value: 'dollar-sign', label: 'Dinero' }
-  ];
+  const handleDeleteCategory = async (category: CategoryWithVisibility) => {
+    if (!user || category.is_system) return;
+    
+    if (!confirm(`¿Estás seguro de que quieres eliminar la categoría "${category.name}"?`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await deleteCategory(category.id, user.id);
+      
+      // Recargar categorías
+      await loadCategories();
+      
+      // Notificar cambios
+      notifyChanges();
+    } catch (err) {
+      console.error('Error eliminando categoría:', err);
+      setError('No se pudo eliminar la categoría');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-lg p-6 shadow-sm border border-blue-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <LayoutGrid className="h-8 w-8 text-blue-500 mr-3" />
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Personalización de Categorías</h2>
-              <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
-                Administra y personaliza las categorías para organizar tus finanzas
-              </p>
-            </div>
-          </div>
-          <Button 
-            onClick={() => setShowForm(!showForm)}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full h-12 px-4 flex items-center"
-          >
-            <Plus size={20} className="mr-2" />
-            Nueva Categoría
-          </Button>
-        </div>
-        
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-md dark:bg-red-900/30 dark:border-red-700">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Formulario para nueva categoría */}
-        {showForm && (
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-md border border-gray-200 dark:border-gray-700 transition-all duration-300 animate-fade-in">
-            <div className="flex items-center mb-4">
-              <Tag className="h-5 w-5 text-blue-500 mr-2" />
-              <h3 className="text-lg font-semibold">Nueva Categoría</h3>
-            </div>
-            
-            <div className="space-y-4">
-              <label className="block text-sm font-medium">Nombre</label>
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'income': return '💰';
+      case 'expense': return '💸';
+      case 'saving': return '🐷';
+      case 'goal': return '🎯';
+      case 'investment': return '📈';
+      default: return '📊';
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'income': return 'Ingreso';
+      case 'expense': return 'Gasto';
+      case 'saving': return 'Ahorro';
+      case 'goal': return 'Objetivo';
+      case 'investment': return 'Inversión';
+      default: return 'Otro';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'income': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+      case 'expense': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      case 'saving': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'goal': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
+      case 'investment': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+    }
+  };
+
+  const CategoryCard = ({ category }: { category: CategoryWithVisibility }) => {
+    const isEditing = editingId === category.id;
+    
+    if (isEditing) {
+      return (
+        <Card className="border-blue-200 dark:border-blue-800 shadow-lg">
+          <CardContent className="p-4">
+            <div className="space-y-3">
               <Input
-                value={newCategory.name}
-                onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 placeholder="Nombre de la categoría"
+                className="font-medium"
               />
               
-              <label className="block text-sm font-medium">Color</label>
               <div className="flex items-center gap-2">
                 <Input
                   type="color"
-                  className="w-12 h-10 p-1"
-                  value={newCategory.color}
-                  onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                  className="w-12 h-10 p-1 border rounded cursor-pointer"
+                  value={editForm.color}
+                  onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
                 />
                 <Input
-                  value={newCategory.color}
-                  onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                  value={editForm.color}
+                  onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
                   placeholder="#3B82F6"
                   className="flex-1"
                 />
               </div>
 
-              <label className="block text-sm font-medium">Tipo</label>
               <Select
                 options={typeOptions}
-                value={newCategory.type}
-                onChange={(value) => setNewCategory({ ...newCategory, type: value })}
-                placeholder="Selecciona un tipo"
+                value={editForm.type}
+                onChange={(value) => setEditForm({ ...editForm, type: value })}
+                placeholder="Tipo de categoría"
               />
+              
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  onClick={() => handleUpdateCategory(category.id)}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  <Save className="w-4 h-4 mr-1" />
+                  Guardar
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    setEditingId(null);
+                    setEditForm({ name: '', color: '', icon: '', type: 'expense' });
+                  }}
+                  className="flex-1"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className={`transition-all duration-200 hover:shadow-lg ${
+        category.is_visible === false ? 'opacity-60' : ''
+      } ${category.is_system ? 'border-blue-100 dark:border-blue-900' : 'border-gray-200 dark:border-gray-700'}`}>
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {category.emoji ? (
+                  <div className="text-2xl">{category.emoji}</div>
+                ) : (
+                  <div 
+                    className="w-8 h-8 rounded-full flex items-center justify-center" 
+                    style={{ backgroundColor: category.color }}
+                  >
+                    <div className="w-4 h-4 rounded-full bg-white opacity-30"></div>
+                  </div>
+                )}
+                
+                <div>
+                  <h3 className="font-medium text-gray-900 dark:text-white truncate">
+                    {category.name}
+                  </h3>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Badge className={`text-xs px-2 py-0.5 ${getTypeColor(category.type)}`}>
+                      <span className="mr-1">{getTypeIcon(category.type)}</span>
+                      {getTypeLabel(category.type)}
+                    </Badge>
+                    {category.is_system && (
+                      <Badge variant="outline" className="text-xs px-2 py-0.5">
+                        Sistema
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Status indicators */}
+            <div className="flex items-center space-x-2">
+              <div className={`flex items-center px-2 py-1 rounded-full text-xs ${
+                category.is_visible !== false 
+                  ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                  : 'bg-gray-50 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400'
+              }`}>
+                {category.is_visible !== false ? (
+                  <>
+                    <Eye className="w-3 h-3 mr-1" />
+                    Visible
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3 h-3 mr-1" />
+                    Oculta
+                  </>
+                )}
+              </div>
+              
+              <div className={`flex items-center px-2 py-1 rounded-full text-xs ${
+                category.visible_in_budget !== false 
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+                  : 'bg-gray-50 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400'
+              }`}>
+                <Filter className="w-3 h-3 mr-1" />
+                {category.visible_in_budget !== false ? 'En presupuesto' : 'Sin presupuesto'}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex items-center space-x-2">
+                {!category.is_system && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleEditCategory(category)}
+                    className="h-9 w-9 p-0 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 transition-all duration-200 hover:scale-105 hover:shadow-md"
+                    title="Editar categoría"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                )}
+                
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleToggleVisibility(category)}
+                  className={`h-9 w-9 p-0 rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-md border ${
+                    category.is_visible !== false 
+                      ? 'bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 text-green-600 dark:text-green-400 border-green-200 dark:border-green-700' 
+                      : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'
+                  }`}
+                  title={category.is_visible !== false ? "Ocultar categoría" : "Mostrar categoría"}
+                >
+                  {category.is_visible !== false ? (
+                    <Eye className="w-4 h-4" />
+                  ) : (
+                    <EyeOff className="w-4 h-4" />
+                  )}
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleToggleBudgetVisibility(category)}
+                  className={`h-9 w-9 p-0 rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-md border ${
+                    category.visible_in_budget !== false 
+                      ? 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-700' 
+                      : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'
+                  }`}
+                  title={category.visible_in_budget !== false ? "Quitar del presupuesto" : "Incluir en presupuesto"}
+                >
+                  <Filter className="w-4 h-4" />
+                </Button>
+                
+                {!category.is_system && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDeleteCategory(category)}
+                    className="h-9 w-9 p-0 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700 transition-all duration-200 hover:scale-105 hover:shadow-md"
+                    title="Eliminar categoría"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              
+              <div className="flex items-center">
+                <div className="relative group">
+                  <div 
+                    className="w-8 h-8 rounded-lg border-2 border-gray-200 dark:border-gray-600 shadow-sm group-hover:shadow-md transition-all duration-200 cursor-pointer" 
+                    style={{ backgroundColor: category.color }}
+                    title={`Color: ${category.color}`}
+                  />
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 rounded-xl p-6 border border-blue-100 dark:border-gray-700 shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="flex items-center">
+            <div className="flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl mr-4">
+              <LayoutGrid className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Gestión de Categorías
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
+                {filteredCategories().length} categorías • Organiza y personaliza tus finanzas
+              </p>
+            </div>
+          </div>
+          
+          <Button 
+            onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-3"
+          >
+            <Plus size={18} className="mr-2" />
+            Nueva Categoría
+          </Button>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg dark:bg-red-900/30 dark:border-red-700">
+          <div className="flex items-center">
+            <X className="h-5 w-5 text-red-500 mr-3" />
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setError(null)}
+              className="ml-auto h-6 w-6 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Create form */}
+      {showForm && (
+        <Card className="border-green-200 dark:border-green-800 shadow-lg">
+          <CardHeader className="bg-green-50 dark:bg-green-900/20 border-b">
+            <CardTitle className="flex items-center text-green-800 dark:text-green-200">
+              <Plus className="h-5 w-5 mr-2" />
+              Crear Nueva Categoría
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Nombre</label>
+                <Input
+                  value={newCategory.name}
+                  onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                  placeholder="Ej: Alimentación, Transporte..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Color</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    className="w-12 h-10 p-1"
+                    value={newCategory.color}
+                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                  />
+                  <Input
+                    value={newCategory.color}
+                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                    placeholder="#3B82F6"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">Tipo</label>
+                <Select
+                  options={typeOptions}
+                  value={newCategory.type}
+                  onChange={(value) => setNewCategory({ ...newCategory, type: value })}
+                  placeholder="Selecciona el tipo de categoría"
+                />
+              </div>
             </div>
             
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3 mt-6">
               <Button 
                 variant="outline" 
-                size="sm"
                 onClick={() => {
                   setShowForm(false);
                   setNewCategory({ name: '', color: '#3B82F6', icon: 'tag', type: 'expense' });
@@ -367,9 +656,9 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
                 Cancelar
               </Button>
               <Button 
-                size="sm"
                 onClick={handleCreateCategory}
-                disabled={loading}
+                disabled={loading || !newCategory.name}
+                className="bg-green-600 hover:bg-green-700"
               >
                 {loading ? (
                   <>
@@ -379,415 +668,116 @@ export function CategoryManager({ onCategoriesChanged }: { onCategoriesChanged?:
                 ) : (
                   <>
                     <Plus className="w-4 h-4 mr-2" />
-                    Crear
+                    Crear Categoría
                   </>
                 )}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters and controls */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+          {/* Search */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Buscar categorías..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        )}
-        
-        {/* Pestañas de categorías */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-            <TabsTrigger 
-              value="custom"
-              className="py-3 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md"
-            >
-              <div className="flex items-center">
-                <Settings className="h-4 w-4 mr-2" />
-                <span>Mis Categorías</span>
-                {customCategories.length > 0 && (
-                  <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                    {customCategories.length}
-                  </Badge>
-                )}
-              </div>
-            </TabsTrigger>
-            <TabsTrigger 
-              value="default"
-              className="py-3 data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:shadow-sm rounded-md"
-            >
-              <div className="flex items-center">
-                <Tag className="h-4 w-4 mr-2" />
-                <span>Categorías Predeterminadas</span>
-                {defaultCategories.length > 0 && (
-                  <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                    {defaultCategories.length}
-                  </Badge>
-                )}
-              </div>
-            </TabsTrigger>
-          </TabsList>
           
-          {/* Contenido: Categorías personalizadas */}
-          <TabsContent value="custom" className="mt-6">
-            {loading && customCategories.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                  <div className="flex justify-between items-center">
-                    <Skeleton variant="text" width="w-40" color="blue" />
-                    <Skeleton variant="text" width="w-24" color="blue" />
-                  </div>
-                </div>
-                <TableRowsSkeleton 
-                  rows={5}
-                  columns={4}
-                  color="blue"
-                  showAvatar={true}
-                  avatarSize="w-8 h-8"
-                />
+          {/* Type filter */}
+          <Select
+            options={typeFilterOptions}
+            value={typeFilter}
+            onChange={setTypeFilter}
+            placeholder="Filtrar por tipo"
+            className="w-48"
+          />
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="h-8 w-8 p-0"
+            >
+              <Grid3X3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="h-8 w-8 p-0"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <TabsTrigger value="all" className="flex items-center">
+            <LayoutGrid className="h-4 w-4 mr-2" />
+            Todas ({customCategories.length + defaultCategories.length})
+          </TabsTrigger>
+          <TabsTrigger value="custom" className="flex items-center">
+            <Settings className="h-4 w-4 mr-2" />
+            Mis Categorías ({customCategories.length})
+          </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center">
+            <Hash className="h-4 w-4 mr-2" />
+            Sistema ({defaultCategories.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-6">
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 w-full" />
+              ))}
+            </div>
+          ) : filteredCategories().length === 0 ? (
+            <div className="text-center py-12">
+              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <LayoutGrid className="h-8 w-8 text-gray-400" />
               </div>
-            ) : customCategories.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-full mb-4">
-                  <Plus className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-                </div>
-                <p className="text-gray-600 dark:text-gray-300 font-medium mb-2">No tienes categorías personalizadas</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Crea una nueva categoría usando el botón superior</p>
-                <Button 
-                  onClick={() => setShowForm(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Plus size={16} className="mr-2" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No hay categorías
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                {searchTerm || typeFilter !== 'all' 
+                  ? 'No se encontraron categorías que coincidan con tu búsqueda'
+                  : 'Comienza creando tu primera categoría personalizada'
+                }
+              </p>
+              {!searchTerm && typeFilter === 'all' && (
+                <Button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" />
                   Crear Categoría
                 </Button>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Nombre</th>
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Color</th>
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Estado</th>
-                        <th className="text-right py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {customCategories.map((category) => (
-                        <tr 
-                          key={category.id} 
-                          className={`border-b border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-                            category.is_visible === false ? 'opacity-60 bg-gray-50 dark:bg-gray-900/20 text-gray-500 dark:text-gray-400' : ''
-                          }`}
-                        >
-                          {editingId === category.id ? (
-                            <>
-                              <td className="py-4 px-6">
-                                <Input
-                                  value={editForm.name}
-                                  onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                                  className="w-full h-12"
-                                />
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="flex items-center">
-                                  <Input
-                                    type="color"
-                                    value={editForm.color}
-                                    onChange={(e) => setEditForm({...editForm, color: e.target.value})}
-                                    className="w-14 h-12 p-1 mr-3"
-                                  />
-                                  <Input
-                                    value={editForm.color}
-                                    onChange={(e) => setEditForm({...editForm, color: e.target.value})}
-                                    className="flex-1 h-12"
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <Badge 
-                                  variant={category.is_visible !== false ? "success" : "outline"}
-                                  className={category.is_visible !== false ? "px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : "px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
-                                >
-                                  {category.is_visible !== false ? "Activa" : "Inactiva"}
-                                </Badge>
-                              </td>
-                              <td className="py-4 px-6 text-right">
-                                <div className="flex justify-end space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    className="h-10 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                    onClick={() => handleEditCategory(category)}
-                                    disabled={category.is_system}
-                                  >
-                                    <Edit2 size={18} />
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                      category.is_visible !== false 
-                                        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" 
-                                        : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                    }`}
-                                    onClick={() => handleToggleVisibility(category)}
-                                  >
-                                    {category.is_visible !== false ? (
-                                      <EyeOff size={18} />
-                                    ) : (
-                                      <Eye size={18} />
-                                    )}
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                      category.visible_in_budget !== false 
-                                        ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" 
-                                        : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    }`}
-                                    onClick={() => handleToggleBudgetVisibility(category)}
-                                  >
-                                    {category.visible_in_budget !== false ? (
-                                      <Filter size={18} />
-                                    ) : (
-                                      <Check size={18} />
-                                    )}
-                                  </Button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="py-4 px-6 font-medium">
-                                <div className="flex items-center">
-                                  <div 
-                                    className="w-5 h-5 rounded mr-3" 
-                                    style={{ backgroundColor: category.color }}
-                                  ></div>
-                                  {category.name}
-                                </div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="flex items-center">
-                                  <div 
-                                    className="w-8 h-8 rounded-full mr-3 flex items-center justify-center" 
-                                    style={{ backgroundColor: category.color }}
-                                  >
-                                    <div className="w-4 h-4 rounded-full bg-white opacity-30"></div>
-                                  </div>
-                                  <code className="text-sm py-1 px-2 bg-gray-100 dark:bg-gray-700 rounded">{category.color}</code>
-                                </div>
-                              </td>
-                              <td className="py-4 px-6">
-                                <div className="flex flex-col space-y-2">
-                                  <Badge 
-                                    variant={category.is_visible !== false ? "success" : "outline"}
-                                    className={category.is_visible !== false ? "px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : "px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
-                                  >
-                                    <div className="flex items-center">
-                                      {category.is_visible !== false ? (
-                                        <Power size={14} className="mr-1.5" />
-                                      ) : (
-                                        <PowerOff size={14} className="mr-1.5" />
-                                      )}
-                                      <span className="mr-1">{category.is_visible !== false ? "Activa" : "Inactiva"}</span>
-                                      <span className="text-xs opacity-75">(Transacciones)</span>
-                                    </div>
-                                  </Badge>
-                                  <Badge 
-                                    variant={category.visible_in_budget !== false ? "success" : "outline"}
-                                    className={category.visible_in_budget !== false ? "px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" : "px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
-                                  >
-                                    <div className="flex items-center">
-                                      <Filter size={14} className="mr-1.5" />
-                                      <span className="mr-1">{category.visible_in_budget !== false ? "Visible" : "Oculta"}</span>
-                                      <span className="text-xs opacity-75">(Presupuesto)</span>
-                                    </div>
-                                  </Badge>
-                                </div>
-                              </td>
-                              <td className="py-4 px-6 text-right">
-                                <div className="flex justify-end space-x-2">
-                                  <Button 
-                                    variant="outline" 
-                                    className="h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    onClick={() => handleEditCategory(category)}
-                                    disabled={category.is_system}
-                                  >
-                                    <Edit2 size={18} />
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                      category.is_visible !== false 
-                                        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" 
-                                        : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                    }`}
-                                    onClick={() => handleToggleVisibility(category)}
-                                  >
-                                    {category.is_visible !== false ? (
-                                      <EyeOff size={18} />
-                                    ) : (
-                                      <Eye size={18} />
-                                    )}
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                      category.visible_in_budget !== false 
-                                        ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" 
-                                        : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    }`}
-                                    onClick={() => handleToggleBudgetVisibility(category)}
-                                  >
-                                    {category.visible_in_budget !== false ? (
-                                      <Filter size={18} />
-                                    ) : (
-                                      <Check size={18} />
-                                    )}
-                                  </Button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-          
-          {/* Contenido: Categorías predeterminadas */}
-          <TabsContent value="default" className="mt-6">
-            {loading && defaultCategories.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                  <div className="flex justify-between items-center">
-                    <Skeleton variant="text" width="w-40" color="gray" />
-                    <Skeleton variant="text" width="w-24" color="gray" />
-                  </div>
-                </div>
-                <TableRowsSkeleton 
-                  rows={5}
-                  columns={3}
-                  color="gray"
-                  showAvatar={true}
-                  avatarSize="w-8 h-8"
-                />
-              </div>
-            ) : defaultCategories.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-full mb-4">
-                  <Tag className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-                </div>
-                <p className="text-gray-600 dark:text-gray-300 font-medium">No hay categorías predeterminadas disponibles</p>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Nombre</th>
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Color</th>
-                        <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Estado</th>
-                        <th className="text-right py-4 px-6 font-medium text-gray-600 dark:text-gray-300">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {defaultCategories.map((category) => (
-                        <tr 
-                          key={category.id} 
-                          className={`border-b border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-                            category.is_visible === false ? 'opacity-60 bg-gray-50 dark:bg-gray-900/20 text-gray-500 dark:text-gray-400' : ''
-                          }`}
-                        >
-                          <td className="py-4 px-6 font-medium">
-                            <div className="flex items-center">
-                              <div 
-                                className="w-5 h-5 rounded mr-3" 
-                                style={{ backgroundColor: category.color }}
-                              ></div>
-                              {category.name}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex items-center">
-                              <div 
-                                className="w-8 h-8 rounded-full mr-3 flex items-center justify-center" 
-                                style={{ backgroundColor: category.color }}
-                              >
-                                <div className="w-4 h-4 rounded-full bg-white opacity-30"></div>
-                              </div>
-                              <code className="text-sm py-1 px-2 bg-gray-100 dark:bg-gray-700 rounded">{category.color}</code>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex flex-col space-y-2">
-                              <Badge 
-                                variant={category.is_visible !== false ? "success" : "outline"}
-                                className={category.is_visible !== false ? "px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : "px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
-                              >
-                                <div className="flex items-center">
-                                  {category.is_visible !== false ? (
-                                    <Power size={14} className="mr-1.5" />
-                                  ) : (
-                                    <PowerOff size={14} className="mr-1.5" />
-                                  )}
-                                  <span className="mr-1">{category.is_visible !== false ? "Activa" : "Inactiva"}</span>
-                                  <span className="text-xs opacity-75">(Transacciones)</span>
-                                </div>
-                              </Badge>
-                              <Badge 
-                                variant={category.visible_in_budget !== false ? "success" : "outline"}
-                                className={category.visible_in_budget !== false ? "px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" : "px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}
-                              >
-                                <div className="flex items-center">
-                                  <Filter size={14} className="mr-1.5" />
-                                  <span className="mr-1">{category.visible_in_budget !== false ? "Visible" : "Oculta"}</span>
-                                  <span className="text-xs opacity-75">(Presupuesto)</span>
-                                </div>
-                              </Badge>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button 
-                                variant="outline" 
-                                className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                  category.is_visible !== false 
-                                    ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" 
-                                    : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                }`}
-                                onClick={() => handleToggleVisibility(category)}
-                              >
-                                {category.is_visible !== false ? (
-                                  <EyeOff size={18} />
-                                ) : (
-                                  <Eye size={18} />
-                                )}
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                className={`h-10 min-w-0 w-10 p-0 border-gray-300 dark:border-gray-600 ${
-                                  category.visible_in_budget !== false 
-                                    ? "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" 
-                                    : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                }`}
-                                onClick={() => handleToggleBudgetVisibility(category)}
-                              >
-                                {category.visible_in_budget !== false ? (
-                                  <Filter size={18} />
-                                ) : (
-                                  <Check size={18} />
-                                )}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCategories().map((category) => (
+                <CategoryCard key={category.id} category={category} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 

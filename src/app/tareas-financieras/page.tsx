@@ -40,6 +40,7 @@ import { updateFixedExpense } from '@/services/fixed-expenses';
 import { getCategories, Category } from '@/services/categories';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function TareasFinancierasPage() {
   const { user } = useUser();
@@ -381,7 +382,8 @@ export default function TareasFinancierasPage() {
   }, {} as Record<string, { name: string; color: string; tasks: FinancialTaskWithDetails[] }>);
 
   return (
-    <div className="flex flex-col space-y-6">
+    <PageContainer>
+      <div className="flex flex-col space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Tareas Financieras</h1>
         <div className="flex items-center gap-3">
@@ -478,7 +480,7 @@ export default function TareasFinancierasPage() {
                 onChange={setSelectedCategory}
                 options={[
                   { value: 'all', label: 'Todas las categorías' },
-                  ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                  ...categories.map(cat => ({ value: cat.id, label: (cat as any).emoji ? `${(cat as any).emoji} ${cat.name}` : cat.name }))
                 ]}
                 className="w-48"
               />
@@ -721,7 +723,7 @@ export default function TareasFinancierasPage() {
                   <Select
                     value={formData.category_id}
                     onChange={(value) => setFormData({ ...formData, category_id: value })}
-                    options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
+                    options={categories.map(cat => ({ value: cat.id, label: (cat as any).emoji ? `${(cat as any).emoji} ${cat.name}` : cat.name }))}
                     placeholder="Selecciona una categoría"
                   />
                 </div>
@@ -785,6 +787,7 @@ export default function TareasFinancierasPage() {
           </div>
         </div>
       </Modal>
-    </div>
+      </div>
+    </PageContainer>
   );
 } 

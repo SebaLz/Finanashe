@@ -28,6 +28,7 @@ import { format, getDaysInMonth, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getCategories } from '@/services/categories';
 import { getBudgetSummary } from '@/services/budgets';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function Dashboard() {
   // Estado para transiciones
@@ -175,7 +176,10 @@ export default function Dashboard() {
       transaccionesPorCategoria.forEach(item => {
         // Verificar que tengamos una categoría y transacciones
         if (item.category && item.transactions && item.transactions.length > 0) {
-          const nombreCategoria = item.category.name || 'Sin categoría';
+          console.log('🔍 Categoría recibida en dashboard:', item.category);
+          const nombreCategoria = item.category.emoji 
+            ? `${item.category.emoji} ${item.category.name}` 
+            : item.category.name || 'Sin categoría';
           const colorCategoria = item.category.color || '#94a3b8'; // Color gris por defecto
           
           // Sumar el total de esta categoría
@@ -385,7 +389,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
+      <div className="space-y-6">
       {/* Header con animación */}
       <div className={`transform transition-all duration-1000 ${showData ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -774,5 +779,6 @@ export default function Dashboard() {
         </Card>
       </div>
     </div>
+    </PageContainer>
   );
 } 
