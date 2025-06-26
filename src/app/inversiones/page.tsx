@@ -88,7 +88,7 @@ export default function InversionesPage() {
           setUserId(user.id);
           
           // Cargar categorías
-          const { data: categoriasData } = await getAllCategories(user.id);
+          const categoriasData = await getAllCategories(user.id);
           setCategorias(categoriasData);
           
           // Cargar tipos de cambio

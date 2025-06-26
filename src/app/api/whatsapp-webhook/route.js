@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
+import { findBestCategoryMatch, getCategoryFallback } from '../../../services/category-matching';
+import { checkDuplicateTransaction, generateDuplicateMessage, logDuplicateMetrics } from '../../../services/duplicate-validation';
 
 // Configuración de clientes
 const openai = new OpenAI({
@@ -790,31 +792,46 @@ async function procesarConfirmacionPositiva(pendingTransaction, user, whatsappId
       return;
     }
 
-    // Buscar o crear la categoría
-    console.log('🔍 Buscando categoría:', resultado.categoría);
-    let categoriaId = await buscarCategoriaIdPorNombre(resultado.categoría, user.id);
+    // Buscar categoría usando fuzzy matching inteligente
+    console.log('🔍 Buscando categoría con matching inteligente:', resultado.categoría);
     
-    if (!categoriaId) {
-      console.log('➕ Creando nueva categoría:', resultado.categoría);
-      categoriaId = await crearCategoriaSupabase(resultado.categoría, user.id);
+    const tipoTransaccion = mapearTipoTransaccion(resultado.tipo);
+    let categoriaMatch = await findBestCategoryMatch(
+      resultado.categoría, 
+      user.id, 
+      tipoTransaccion
+    );
+    
+    let categoriaId;
+    let categoriaEncontrada = false;
+    let useFallback = false;
+    
+    if (categoriaMatch) {
+      categoriaId = categoriaMatch.id;
+      categoriaEncontrada = true;
+      console.log(`✅ Categoría encontrada con matching: ${categoriaMatch.name} (score: ${categoriaMatch.score})`);
+    } else {
+      console.log('⚠️ No se encontró coincidencia, usando categoría fallback');
+      categoriaId = await getCategoryFallback(user.id);
+      useFallback = true;
     }
     
+    // Registrar métricas de búsqueda
+    console.log(`📊 Categoría matching: "${resultado.categoría}" → ${categoriaMatch ? categoriaMatch.name : 'Fallback'} (score: ${categoriaMatch?.score || 0})`);
+    
     if (!categoriaId) {
-      console.error('❌ No se pudo obtener o crear la categoría');
+      console.error('❌ No se pudo obtener categoría fallback');
       await enviarMensajeWhatsApp(
         whatsappId,
-        '❌ Error con la categoría. Por favor, intenta de nuevo.'
+        '❌ Error crítico con las categorías. Por favor, contacta soporte.'
       );
       return;
     }
 
-    console.log('✅ Categoría obtenida:', categoriaId);
-
-    // Mapear el tipo de transacción
-    const tipoTransaccion = mapearTipoTransaccion(resultado.tipo);
+    console.log('✅ Categoría final obtenida:', categoriaId);
     console.log('🔄 Tipo mapeado:', resultado.tipo, '->', tipoTransaccion);
 
-    // Preparar los datos de la transacción
+    // Preparar los datos de la transacción para validación
     const transaccionData = {
       user_id: user.id,
       type: tipoTransaccion,
@@ -825,7 +842,29 @@ async function procesarConfirmacionPositiva(pendingTransaction, user, whatsappId
       is_budgetable: true
     };
 
-    console.log('📄 Datos de transacción a guardar:', transaccionData);
+    console.log('📄 Datos de transacción preparados:', transaccionData);
+
+    // Validar duplicados antes de guardar
+    console.log('🔍 Validando duplicados...');
+    const duplicateCheck = await checkDuplicateTransaction(transaccionData);
+    
+    // Registrar métricas de duplicados
+    logDuplicateMetrics(transaccionData, duplicateCheck);
+    
+    // Manejar según el resultado de la validación
+    if (duplicateCheck.recommendation === 'block') {
+      console.log('🚫 Transacción bloqueada por duplicado exacto');
+      const duplicateMessage = generateDuplicateMessage(duplicateCheck);
+      
+      await enviarMensajeWhatsApp(
+        whatsappId,
+        `${duplicateMessage}\n\n❌ Transacción no guardada. Si es una transacción diferente, modifica algún detalle y vuelve a intentar.`
+      );
+      
+      // Limpiar transacción pendiente
+      conversationContext.clearPendingTransaction(whatsappId);
+      return;
+    }
 
     // Guardar directamente en la tabla transactions
     const { data: nuevaTransaccion, error: saveError } = await supabase
@@ -848,13 +887,37 @@ async function procesarConfirmacionPositiva(pendingTransaction, user, whatsappId
     // Limpiar la transacción pendiente del contexto
     conversationContext.clearPendingTransaction(whatsappId);
 
-    // Enviar mensaje de confirmación con más detalles
+    // Preparar mensaje de confirmación mejorado
     const tipoEmoji = resultado.tipo.toLowerCase() === 'ingreso' ? '💰' : '💸';
-    const mensajeFinal = `✅ ¡Transacción registrada exitosamente!\n\n` +
-                        `${tipoEmoji} ${capitalizarPrimeraLetra(resultado.tipo)}: $${resultado.monto.toLocaleString('es-AR')}\n` +
-                        `🏷️ Categoría: ${capitalizarPrimeraLetra(resultado.categoría)}\n` +
-                        `📅 Fecha: ${formatearFecha(resultado.fecha)}\n\n` +
-                        `Puedes ver tus transacciones en la app web 📱`;
+    let mensajeFinal = `✅ ¡Transacción registrada exitosamente!\n\n`;
+    
+    mensajeFinal += `${tipoEmoji} ${capitalizarPrimeraLetra(resultado.tipo)}: $${resultado.monto.toLocaleString('es-AR')}\n`;
+    
+    // Mostrar categoría encontrada o indicar si se usó fallback
+    if (categoriaEncontrada && categoriaMatch) {
+      const categoriaConEmoji = categoriaMatch.emoji ? 
+        `${categoriaMatch.emoji} ${categoriaMatch.name}` : 
+        categoriaMatch.name;
+      mensajeFinal += `🏷️ Categoría: ${categoriaConEmoji}`;
+      
+      if (categoriaMatch.is_fuzzy_match) {
+        mensajeFinal += ` (encontrada por similitud)`;
+      }
+    } else {
+      mensajeFinal += `🏷️ Categoría: ❓ Otros (no se encontró coincidencia)`;
+    }
+    
+    mensajeFinal += `\n📅 Fecha: ${formatearFecha(resultado.fecha)}`;
+    
+    // Mostrar advertencia de duplicado si aplica
+    if (duplicateCheck.recommendation === 'warn') {
+      const duplicateWarning = generateDuplicateMessage(duplicateCheck);
+      if (duplicateWarning) {
+        mensajeFinal += `\n\n${duplicateWarning.replace('¿Confirmas que es una transacción diferente?', 'Se guardó como transacción nueva.')}`;
+      }
+    }
+    
+    mensajeFinal += `\n\nPuedes ver tus transacciones en la app web 📱`;
 
     await enviarMensajeWhatsApp(whatsappId, mensajeFinal);
 
