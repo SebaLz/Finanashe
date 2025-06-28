@@ -84,11 +84,34 @@
     - Resumen semanal/mensual automático
 
 12. **[BE-005]** Implementar comandos avanzados para WhatsApp
-    - `/resumen` - Resumen del mes actual
-    - `/balance` - Balance entre ingresos y gastos
-    - `/categorias` - Lista de categorías disponibles
-    - `/ayuda` - Comandos disponibles
-    - `/plan` - Ver plan actual y uso mensual
+    
+    **Comandos Básicos (Fase 1 - Semana 1):**
+    - `/ayuda` - Lista completa de comandos disponibles + onboarding
+    - `/plan` - Ver plan actual, transacciones usadas/restantes + CTA upgrade
+    - `/resumen` - Resumen del mes (ingresos, gastos, balance)
+    
+    **Comandos Intermedios (Fase 2 - Semana 2):**
+    - `/balance` - Balance actual con comparativa mes anterior
+    - `/categorias` - Lista de categorías con emojis y contadores de uso
+    - `/gastos` - Top 5 categorías de gastos del mes
+    
+    **Comandos Premium (Fase 3 - Solo plan premium):**
+    - `/exportar` - Generar y enviar reporte PDF por WhatsApp
+    - `/presupuesto` - Estado detallado del presupuesto por categorías
+    - `/metas` - Progreso de objetivos de ahorro
+    - `/prediccion` - Proyección de gastos basada en histórico
+    
+    **Comandos en Lenguaje Natural:**
+    - "resumen del mes" → `/resumen`
+    - "cuánto gasté" → `/gastos`
+    - "mi plan" → `/plan`
+    - "ayuda" → `/ayuda`
+    
+    **Integraciones Requeridas:**
+    - Validación de plan antes de ejecutar comandos premium
+    - Logging de uso de comandos para analytics
+    - Rate limiting específico para comandos (5 comandos/minuto)
+    - Respuestas contextuales según el plan del usuario
 
 13. **[BE-006]** API REST completa para la aplicación
     - Endpoints RESTful documentados con OpenAPI
@@ -99,6 +122,20 @@
     - Exportar a Excel con formato profesional
     - Generar PDFs de reportes mensuales
     - Exportación programada automática
+
+14.1. **[COMMAND-001]** Sistema de detección inteligente de comandos
+    - Procesar comandos antes que transacciones
+    - Detección de comandos en lenguaje natural con IA
+    - Rate limiting específico para comandos (diferente a transacciones)
+    - Analytics de comandos más utilizados
+    - Respuestas contextuales según historial del usuario
+
+14.2. **[COMMAND-002]** Comandos premium como diferenciador de valor
+    - `/exportar` solo para usuarios premium
+    - `/prediccion` con análisis predictivo avanzado
+    - `/presupuesto` con alertas inteligentes
+    - Mensajes de upgrade cuando usuario gratuito intenta comando premium
+    - Preview limitado de comandos premium para generar FOMO
 
 ### Frontend - UI/UX
 11. **[FE-001]** Dashboard interactivo mejorado
@@ -345,8 +382,11 @@
 
 ### Nueva Prioridad de Implementación (con planes)
 **Semana 1:** PLAN-001, PLAN-002, BE-001 (base del sistema de límites)
+**Semana 1.5:** COMMAND-001, BE-005 Fase 1 (comandos básicos: /plan, /ayuda)
 **Semana 2:** PLAN-003, PLAN-004 (pagos y dashboard de uso)
+**Semana 2.5:** BE-005 Fase 2 (comandos intermedios: /resumen, /balance)
 **Semana 3:** PLAN-005, PLAN-006 (marketing y notificaciones)
+**Semana 3.5:** COMMAND-002, BE-005 Fase 3 (comandos premium como diferenciador)
 **Semana 4:** SEC-002, SEC-003 (seguridad)
 
 ### Modelo de Negocio
@@ -362,8 +402,43 @@
 
 ### Dependencies
 - Algunas tareas dependen de otras (ej: Analytics requiere logging mejorado)
+- Los comandos premium requieren sistema de planes funcionando
 - Las migraciones deben hacerse en orden y con cuidado
 - Testing debe acompañar cada nueva feature
+
+### Ejemplos de Implementación de Comandos Críticos
+
+**Comando `/plan` (Crítico para monetización):**
+```javascript
+// Respuesta ejemplo para usuario gratuito cerca del límite
+"📊 Plan Gratuito: 8/10 transacciones usadas
+⚠️ ¡Solo te quedan 2 transacciones!
+🚀 Upgrade a Premium: 300 transacciones/mes
+💳 Solo $29.99 - Upgrade: tu-app.com/upgrade"
+```
+
+**Comando `/ayuda` (Onboarding crítico):**
+```javascript
+// Respuesta contextual según plan del usuario
+"🤖 Comandos disponibles:
+/plan - Ver tu uso actual
+/resumen - Balance del mes
+/ayuda - Esta lista
+
+💡 Escribe transacciones normalmente:
+'Gasté $500 en comida'
+'Ingreso 2000 freelance'
+
+🔒 Comandos Premium: /exportar /prediccion
+👉 Upgrade: tu-app.com/upgrade"
+```
+
+### Métricas de Éxito para Comandos
+- **Adoption Rate**: % usuarios que usan al menos 1 comando/semana
+- **Command Usage**: Comandos más utilizados por plan
+- **Conversion Trigger**: % usuarios que upgraden después de usar comando premium
+- **Engagement**: Usuarios con comandos vs solo transacciones
+- **Retention**: Usuarios que usan comandos tienen mayor retención
 
 Este script debes de ejecutar en supabase para que funcione: [[memory:6981019243630000699]]
 ```sql
