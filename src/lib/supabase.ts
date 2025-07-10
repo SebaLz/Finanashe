@@ -334,6 +334,120 @@ export type Database = {
           created_at?: string;
         };
       };
+      rate_limit_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          ip_address: string;
+          endpoint: string;
+          limit_type: string;
+          current_count: number;
+          limit_threshold: number;
+          plan_type: string;
+          blocked: boolean;
+          reason: string | null;
+          user_agent: string | null;
+          request_metadata: Record<string, any> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          ip_address: string;
+          endpoint?: string;
+          limit_type: string;
+          current_count: number;
+          limit_threshold: number;
+          plan_type: string;
+          blocked?: boolean;
+          reason?: string | null;
+          user_agent?: string | null;
+          request_metadata?: Record<string, any> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          ip_address?: string;
+          endpoint?: string;
+          limit_type?: string;
+          current_count?: number;
+          limit_threshold?: number;
+          plan_type?: string;
+          blocked?: boolean;
+          reason?: string | null;
+          user_agent?: string | null;
+          request_metadata?: Record<string, any> | null;
+          created_at?: string;
+        };
+      };
+      rate_limit_config: {
+        Row: {
+          id: string;
+          plan_type: string;
+          daily_limit: number;
+          hourly_limit: number | null;
+          minute_limit: number | null;
+          burst_limit: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan_type: string;
+          daily_limit: number;
+          hourly_limit?: number | null;
+          minute_limit?: number | null;
+          burst_limit?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          plan_type?: string;
+          daily_limit?: number;
+          hourly_limit?: number | null;
+          minute_limit?: number | null;
+          burst_limit?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      user_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan_type: string;
+          is_active: boolean;
+          starts_at: string;
+          ends_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan_type: string;
+          is_active?: boolean;
+          starts_at: string;
+          ends_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          plan_type?: string;
+          is_active?: boolean;
+          starts_at?: string;
+          ends_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 }; 

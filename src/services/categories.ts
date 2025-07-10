@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-export type CategoryType = 'income' | 'expense' | 'transfer' | 'investment' | 'saving' | 'goal';
+export type CategoryType = 'income' | 'expense' | 'transfer' | 'investment' | 'saving' | 'goal' | 'budget';
 export type CategoryContext = 'personal' | 'business';
 
 export type Category = {

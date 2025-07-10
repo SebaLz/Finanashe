@@ -19,6 +19,7 @@ export type FixedExpense = {
 
 export type FixedExpenseWithCategory = FixedExpense & {
   category: {
+    id: string;
     name: string;
     color: string;
     icon: string | null;

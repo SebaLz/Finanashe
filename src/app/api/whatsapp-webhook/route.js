@@ -4,6 +4,8 @@ import axios from 'axios';
 import { createClient } from '@supabase/supabase-js';
 import { findBestCategoryMatch, getCategoryFallback } from '../../../services/category-matching';
 import { checkDuplicateTransaction, generateDuplicateMessage, logDuplicateMetrics } from '../../../services/duplicate-validation';
+import { createTransactionRateLimiter } from '../../../lib/transaction-rate-limiter';
+import { createTransactionRateLimitNotificationService } from '../../../lib/transaction-rate-limit-notifications';
 
 // Configuración de clientes
 const openai = new OpenAI({
@@ -302,6 +304,8 @@ export async function POST(request) {
       } else {
         console.log('❓ Tipo de mensaje no soportado:', message.type);
       }
+
+
     }
     
     return NextResponse.json({ status: 'ok' });
@@ -866,23 +870,81 @@ async function procesarConfirmacionPositiva(pendingTransaction, user, whatsappId
       return;
     }
 
-    // Guardar directamente en la tabla transactions
-    const { data: nuevaTransaccion, error: saveError } = await supabase
-      .from('transactions')
-      .insert([transaccionData])
-      .select()
-      .single();
+    // 🚨 VERIFICAR RATE LIMITING ANTES DE GUARDAR LA TRANSACCIÓN
+    try {
+      console.log('🔍 Verificando rate limiting antes de guardar');
+      const rateLimiter = createTransactionRateLimiter();
+      const notificationService = createTransactionRateLimitNotificationService();
+      
+      // Verificar si excede el límite mensual ANTES de guardar
+      const rateLimitResult = await rateLimiter.checkTransactionRateLimit(user.id);
+      
+      if (!rateLimitResult.allowed) {
+        console.log('🚫 Rate limit exceeded BEFORE saving transaction, blocking...');
+        
+        // Enviar mensaje de límite alcanzado
+        await enviarMensajeWhatsApp(whatsappId, rateLimitResult.message);
+        
+        // Limpiar la transacción pendiente del contexto
+        conversationContext.clearPendingTransaction(whatsappId);
+        
+        return; // Salir sin guardar la transacción
+      }
+      
+      console.log(`📊 Rate limit check passed: ${rateLimitResult.currentUsage}/${rateLimitResult.monthlyLimit} (${rateLimitResult.plan})`);
+      
+      // Guardar la transacción SOLO si pasa el rate limiting
+      const { data: nuevaTransaccion, error: saveError } = await supabase
+        .from('transactions')
+        .insert([transaccionData])
+        .select()
+        .single();
 
-    if (saveError) {
-      console.error('❌ Error guardando transacción:', saveError);
-      await enviarMensajeWhatsApp(
-        whatsappId,
-        '❌ Error al guardar la transacción. Por favor, intenta de nuevo.'
+      if (saveError) {
+        console.error('❌ Error guardando transacción:', saveError);
+        await enviarMensajeWhatsApp(
+          whatsappId,
+          '❌ Error al guardar la transacción. Por favor, intenta de nuevo.'
+        );
+        return;
+      }
+
+      console.log('✅ Transacción guardada exitosamente:', nuevaTransaccion);
+      
+      // Registrar la transacción para rate limiting
+      await rateLimiter.logTransaction(user.id, nuevaTransaccion.id, rateLimitResult.plan);
+      
+      // Enviar notificaciones proactivas si está cerca del límite
+      const newUsage = rateLimitResult.currentUsage + 1;
+      await notificationService.processWarnings(
+        user.id,
+        newUsage,
+        rateLimitResult.monthlyLimit,
+        rateLimitResult.plan
       );
-      return;
-    }
+      
+      console.log('✅ Rate limiting aplicado exitosamente');
+      
+    } catch (rateLimitError) {
+      console.error('❌ Error aplicando rate limiting:', rateLimitError);
+      // Si falla rate limiting, guardar la transacción sin límites
+      const { data: nuevaTransaccion, error: saveError } = await supabase
+        .from('transactions')
+        .insert([transaccionData])
+        .select()
+        .single();
 
-    console.log('✅ Transacción guardada exitosamente:', nuevaTransaccion);
+      if (saveError) {
+        console.error('❌ Error guardando transacción (fallback):', saveError);
+        await enviarMensajeWhatsApp(
+          whatsappId,
+          '❌ Error al guardar la transacción. Por favor, intenta de nuevo.'
+        );
+        return;
+      }
+      
+      console.log('⚠️ Transacción guardada sin verificación de rate limiting');
+    }
 
     // Limpiar la transacción pendiente del contexto
     conversationContext.clearPendingTransaction(whatsappId);

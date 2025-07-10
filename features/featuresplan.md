@@ -5,16 +5,19 @@
 ## 📋 **Resumen del Feature Spec**
 
 **Límites por Plan:**
-- **Gratuito**: 10 transacciones WhatsApp/día
-- **Premium**: 300 transacciones WhatsApp/día
+- **Gratuito**: 10 transacciones WhatsApp/mes
+- **Premium**: 300 transacciones WhatsApp/mes
+
+**IMPORTANTE:** Una "transacción" se cuenta solo cuando se registra exitosamente en la base de datos, NO por cada mensaje de WhatsApp.
 
 **Requisitos Críticos:**
-- ✅ Validación por IP y user_id 
-- ✅ Bloqueo con mensajes claros
-- ✅ Logging completo de intentos
+- ✅ Validación por user_id (NO por mensajes, solo por transacciones guardadas)
+- ✅ Conteo mensual de transacciones registradas en BD
+- ✅ Bloqueo con mensajes claros y revert de transacción
+- ✅ Logging completo de transacciones
 - ✅ Configuración dinámica (no hardcoded)
-- ✅ Extensible para futuros límites
-- ✅ Compatible con SSR/Edge Functions
+- ✅ Notificaciones proactivas al 80% y 90%
+- ✅ Compatible con WhatsApp Bot workflow
 
 ---
 
@@ -57,16 +60,26 @@ CREATE TABLE IF NOT EXISTS public.rate_limit_config (
 
 -- Insertar configuraciones por defecto
 INSERT INTO public.rate_limit_config (plan_type, daily_limit, hourly_limit, minute_limit) VALUES
-('free', 10, 5, 2),
-('premium', 300, 50, 10)
+('free', 10, NULL, NULL),
+('premium', 300, NULL, NULL)
 ON CONFLICT (plan_type) DO UPDATE SET
-  daily_limit = EXCLUDED.daily_limit,
-  hourly_limit = EXCLUDED.hourly_limit,
-  minute_limit = EXCLUDED.minute_limit;
+  daily_limit = EXCLUDED.daily_limit;
 
--- Índices para performance
-CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_user_date ON rate_limit_logs(user_id, DATE(created_at));
-CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_ip_date ON rate_limit_logs(ip_address, DATE(created_at));
+-- NOTA: daily_limit se usa como monthly_limit (10 transacciones/mes para free, 300/mes para premium)
+-- hourly_limit y minute_limit se setean a NULL ya que no se usan
+
+-- Índices para performance (sin funciones para compatibilidad total con Supabase)
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_user_created ON rate_limit_logs(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_ip_created ON rate_limit_logs(ip_address, created_at);
+
+-- Índices adicionales para consultas frecuentes
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_blocked ON rate_limit_logs(blocked, created_at) WHERE blocked = true;
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_plan_type ON rate_limit_logs(plan_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_endpoint ON rate_limit_logs(endpoint, created_at);
+
+-- Índices para consultas por fecha específica (evitando funciones)
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_created_date ON rate_limit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_user_blocked ON rate_limit_logs(user_id, blocked);
 ```
 
 ### **Tarea 1.2: Servicios Core de Rate Limiting**
@@ -77,26 +90,29 @@ CREATE INDEX IF NOT EXISTS idx_rate_limit_logs_ip_date ON rate_limit_logs(ip_add
 
 ```typescript
 export interface RateLimitConfig {
-  dailyLimit: number;
-  hourlyLimit: number;
-  minuteLimit: number;
-  burstLimit: number;
+  monthlyLimit: number;
 }
 
 export interface RateLimitResult {
   allowed: boolean;
   remaining: {
-    daily: number;
-    hourly: number;
-    minute: number;
+    monthly: number;
   };
   resetTime: {
-    daily: Date;
-    hourly: Date;
-    minute: Date;
+    monthly: Date;
   };
   currentPlan: string;
+  currentUsage: number;
+  monthlyLimit: number;
   reason?: string;
+}
+
+export interface TransactionRateLimitResult {
+  allowed: boolean;
+  currentUsage: number;
+  monthlyLimit: number;
+  plan: string;
+  message?: string;
 }
 
 export class WhatsAppRateLimiter {
@@ -106,32 +122,112 @@ export class WhatsAppRateLimiter {
     this.supabase = supabaseClient;
   }
 
-  async checkRateLimit(
-    userId: string, 
-    ipAddress: string,
-    userAgent?: string
-  ): Promise<RateLimitResult> {
-    // Implementación detallada
+  /**
+   * Verificar si el usuario puede registrar una transacción más este mes
+   */
+  async checkTransactionRateLimit(userId: string): Promise<TransactionRateLimitResult> {
+    try {
+      // Obtener plan del usuario
+      const planType = await this.getUserPlan(userId);
+      
+      // Obtener configuración de límites mensuales
+      const config = await this.getRateLimitConfig(planType);
+      
+      // Contar transacciones del mes actual
+      const monthlyCount = await this.getMonthlyTransactionCount(userId);
+      
+      const allowed = monthlyCount < config.monthlyLimit;
+      
+      return {
+        allowed,
+        currentUsage: monthlyCount,
+        monthlyLimit: config.monthlyLimit,
+        plan: planType,
+        message: allowed ? undefined : this.generateLimitMessage(planType, monthlyCount, config.monthlyLimit)
+      };
+      
+    } catch (error) {
+      console.error('❌ Error checking transaction rate limit:', error);
+      // Fail-open: permitir en caso de error
+      return {
+        allowed: true,
+        currentUsage: 0,
+        monthlyLimit: 999,
+        plan: 'unknown'
+      };
+    }
   }
 
-  async incrementUsage(
+  /**
+   * Registrar una transacción para rate limiting
+   */
+  async logTransaction(
     userId: string,
-    ipAddress: string,
-    allowed: boolean,
-    reason?: string
+    transactionId: string,
+    planType: string
   ): Promise<void> {
-    // Log del intento
+    try {
+      await this.supabase
+        .from('rate_limit_logs')
+        .insert({
+          user_id: userId,
+          ip_address: 'whatsapp',
+          endpoint: '/api/whatsapp-webhook',
+          limit_type: 'monthly_transaction',
+          current_count: await this.getMonthlyTransactionCount(userId) + 1,
+          limit_threshold: planType === 'free' ? 10 : 300,
+          plan_type: planType,
+          blocked: false,
+          reason: 'Transaction registered successfully',
+          request_metadata: { transaction_id: transactionId }
+        });
+        
+    } catch (error) {
+      console.error('❌ Error logging transaction:', error);
+    }
   }
 
-  private async getRateLimitConfig(planType: string): Promise<RateLimitConfig> {
-    // Obtener configuración dinámica
+  /**
+   * Obtener count de transacciones del mes actual
+   */
+  private async getMonthlyTransactionCount(userId: string): Promise<number> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const { count, error } = await this.supabase
+      .from('rate_limit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('limit_type', 'monthly_transaction')
+      .eq('blocked', false)
+      .gte('created_at', startOfMonth.toISOString());
+    
+    if (error) {
+      console.error('❌ Error counting monthly transactions:', error);
+      return 0;
+    }
+    
+    return count || 0;
   }
 
-  private async getCurrentCounts(
-    userId: string,
-    ipAddress: string
-  ): Promise<UsageCounts> {
-    // Contar usos actuales
+  private generateLimitMessage(planType: string, currentUsage: number, limit: number): string {
+    if (planType === 'free') {
+      return `🚫 *Límite Mensual Alcanzado*\n\n` +
+             `Has alcanzado tu límite de *${limit} transacciones mensuales* del plan gratuito.\n\n` +
+             `📊 Transacciones usadas: *${currentUsage}/${limit}*\n\n` +
+             `🚀 *¡Upgrade a Premium!*\n` +
+             `✨ *300 transacciones mensuales*\n` +
+             `💎 Solo *$29.99 ARS/mes*\n\n` +
+             `🔄 Tu límite se resetea el 1ro del próximo mes\n` +
+             `👉 Upgrade: https://tu-dominio.com/upgrade`;
+    } else {
+      return `⚠️ *Límite Premium Alcanzado*\n\n` +
+             `Has alcanzado tu límite de *${limit} transacciones mensuales*.\n\n` +
+             `📊 Transacciones usadas: *${currentUsage}/${limit}*\n\n` +
+             `🔄 Tu límite se resetea el 1ro del próximo mes\n` +
+             `📞 Si necesitas más transacciones, contáctanos: /soporte`;
+    }
   }
 }
 ```
@@ -258,18 +354,35 @@ export async function POST(request) {
 
     const user = users[0];
     
-    // 🚨 APLICAR RATE LIMITING
-    const rateLimitResponse = await rateLimitMiddleware(request, user.id);
-    if (rateLimitResponse) {
-      // Si hay rate limiting, enviar mensaje al usuario también
-      const rateLimitData = await rateLimitResponse.json();
-      await enviarMensajeWhatsApp(whatsappNumber, rateLimitData.message);
-      return rateLimitResponse;
-    }
+    // Procesar mensaje normalmente (SIN rate limiting aún)
+    console.log('📝 Processing message normally');
+    const transactionResult = await procesarMensaje(message, body);
     
-    // Continuar con procesamiento normal del mensaje
-    console.log('✅ Rate limit passed, processing message');
-    await procesarMensaje(message, body);
+    // 🚨 APLICAR RATE LIMITING SOLO SI SE GUARDÓ UNA TRANSACCIÓN
+    if (transactionResult.transactionSaved) {
+      const rateLimitResult = await checkTransactionRateLimit(user.id);
+      
+      if (!rateLimitResult.allowed) {
+        // REVERTIR la transacción guardada
+        await revertTransaction(transactionResult.transactionId);
+        
+        // Enviar mensaje de límite alcanzado
+        await enviarMensajeWhatsApp(whatsappNumber, rateLimitResult.message);
+        
+        return NextResponse.json({ 
+          status: 'rate_limited', 
+          reason: 'Monthly transaction limit exceeded' 
+        });
+      } else {
+        // Enviar notificaciones proactivas si está cerca del límite
+        await rateLimitNotificationService.processWarnings(
+          user.id, 
+          rateLimitResult.currentUsage, 
+          rateLimitResult.monthlyLimit, 
+          rateLimitResult.plan
+        );
+      }
+    }
     
     return NextResponse.json({ status: 'ok' });
     
@@ -282,105 +395,12 @@ export async function POST(request) {
 
 ---
 
-## 📊 **Fase 3: Monitoreo y Analytics (Días 5-6)**
+## 📊 **Fase 3: Monitoreo y Analytics (OMITIDA)**
 
-### **Tarea 3.1: Dashboard de Rate Limiting**
-**Duración:** 6 horas
-**Prioridad:** 🎯 Media
-
-**Archivo:** `src/app/admin/rate-limits/page.tsx`
-
-```typescript
-export default function RateLimitDashboard() {
-  return (
-    <div className="space-y-6">
-      <h1>Rate Limiting Analytics</h1>
-      
-      {/* Métricas en tiempo real */}
-      <div className="grid grid-cols-4 gap-4">
-        <MetricCard title="Requests Today" value={todayRequests} />
-        <MetricCard title="Blocked Today" value={blockedToday} />
-        <MetricCard title="Free Users Hitting Limit" value={freeUsersBlocked} />
-        <MetricCard title="Premium Conversion Rate" value={conversionRate} />
-      </div>
-      
-      {/* Gráficos de uso */}
-      <RateLimitChart />
-      
-      {/* Tabla de logs recientes */}
-      <RateLimitLogsTable />
-      
-      {/* Configuración dinámica */}
-      <RateLimitConfigPanel />
-    </div>
-  );
-}
-```
-
-### **Tarea 3.2: Funciones SQL para Analytics**
-**Duración:** 3 horas
-**Prioridad:** 🎯 Media
-
-```sql
--- Función para obtener estadísticas diarias
-CREATE OR REPLACE FUNCTION get_rate_limit_stats(target_date DATE DEFAULT CURRENT_DATE)
-RETURNS TABLE(
-  total_requests BIGINT,
-  blocked_requests BIGINT,
-  unique_users BIGINT,
-  free_users_blocked BIGINT,
-  premium_users_blocked BIGINT,
-  top_blocked_ips JSON
-) LANGUAGE plpgsql AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    COUNT(*) as total_requests,
-    COUNT(*) FILTER (WHERE blocked = true) as blocked_requests,
-    COUNT(DISTINCT user_id) as unique_users,
-    COUNT(*) FILTER (WHERE blocked = true AND plan_type = 'free') as free_users_blocked,
-    COUNT(*) FILTER (WHERE blocked = true AND plan_type = 'premium') as premium_users_blocked,
-    json_agg(DISTINCT ip_address) FILTER (WHERE blocked = true) as top_blocked_ips
-  FROM rate_limit_logs 
-  WHERE DATE(created_at) = target_date;
-END;
-$$;
-
--- Función para detectar usuarios cerca del límite
-CREATE OR REPLACE FUNCTION get_users_near_limit()
-RETURNS TABLE(
-  user_id UUID,
-  current_usage BIGINT,
-  daily_limit INTEGER,
-  usage_percentage NUMERIC,
-  plan_type TEXT
-) LANGUAGE plpgsql AS $$
-BEGIN
-  RETURN QUERY
-  WITH daily_usage AS (
-    SELECT 
-      rl.user_id,
-      COUNT(*) as current_usage,
-      rlc.daily_limit,
-      rlc.plan_type
-    FROM rate_limit_logs rl
-    JOIN rate_limit_config rlc ON rl.plan_type = rlc.plan_type
-    WHERE DATE(rl.created_at) = CURRENT_DATE
-      AND rl.blocked = false
-    GROUP BY rl.user_id, rlc.daily_limit, rlc.plan_type
-  )
-  SELECT 
-    du.user_id,
-    du.current_usage,
-    du.daily_limit,
-    ROUND((du.current_usage::NUMERIC / du.daily_limit) * 100, 2) as usage_percentage,
-    du.plan_type
-  FROM daily_usage du
-  WHERE (du.current_usage::NUMERIC / du.daily_limit) > 0.8 -- 80% del límite
-  ORDER BY usage_percentage DESC;
-END;
-$$;
-```
+> **🚫 FASE OMITIDA TEMPORALMENTE**
+> 
+> Esta fase requiere un panel de administrador que no está implementado en el proyecto actual.
+> Se implementará en el futuro cuando se desarrolle la infraestructura de admin.
 
 ---
 
@@ -395,36 +415,101 @@ $$;
 ```typescript
 export class RateLimitNotificationService {
   
-  async sendLimitWarning(userId: string, usage: number, limit: number): Promise<void> {
-    const percentage = (usage / limit) * 100;
+  /**
+   * Procesar advertencias automáticas después de registrar una transacción
+   */
+  async processWarnings(
+    userId: string, 
+    currentUsage: number, 
+    monthlyLimit: number, 
+    planType: string
+  ): Promise<void> {
+    const percentage = (currentUsage / monthlyLimit) * 100;
     
     if (percentage >= 80 && percentage < 90) {
       // Advertencia al 80%
-      await this.sendWarningNotification(userId, 'near_limit', {
-        used: usage,
-        total: limit,
-        remaining: limit - usage
+      await this.sendLimitWarning(userId, {
+        used: currentUsage,
+        total: monthlyLimit,
+        remaining: monthlyLimit - currentUsage,
+        percentage: Math.round(percentage),
+        plan: planType,
+        resetTime: this.getNextMonthStart()
       });
     } else if (percentage >= 90) {
       // Advertencia crítica al 90%
-      await this.sendWarningNotification(userId, 'critical_limit', {
-        used: usage,
-        total: limit,
-        remaining: limit - usage
+      await this.sendLimitWarning(userId, {
+        used: currentUsage,
+        total: monthlyLimit,
+        remaining: monthlyLimit - currentUsage,
+        percentage: Math.round(percentage),
+        plan: planType,
+        resetTime: this.getNextMonthStart()
       });
+      
+      // Enviar recordatorio de upgrade si es usuario free
+      if (planType === 'free') {
+        await this.sendUpgradeReminder(userId);
+      }
     }
   }
   
-  async sendUpgradeReminder(userId: string): Promise<void> {
-    // Recordatorio de upgrade para usuarios que hitting limit frecuentemente
+  async sendLimitWarning(userId: string, metrics: WarningMetrics): Promise<boolean> {
+    try {
+      // Verificar si ya se envió una advertencia reciente
+      const recentWarning = await this.hasRecentWarning(userId, 'limit_warning');
+      if (recentWarning) {
+        return false;
+      }
+      
+      // Obtener datos del usuario
+      const userData = await this.getUserData(userId);
+      if (!userData?.whatsapp) {
+        return false;
+      }
+      
+      // Generar mensaje de advertencia
+      const message = this.generateWarningMessage(metrics);
+      
+      // Enviar mensaje por WhatsApp
+      await this.sendWhatsAppMessage(userData.whatsapp, message);
+      
+      // Registrar notificación
+      await this.logNotification(userId, 'limit_warning', metrics);
+      
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Error sending limit warning:', error);
+      return false;
+    }
   }
   
-  private async sendWarningNotification(
-    userId: string, 
-    type: string, 
-    data: any
-  ): Promise<void> {
-    // Implementar notificación (email, push, WhatsApp)
+  private generateWarningMessage(metrics: WarningMetrics): string {
+    const { used, total, remaining, percentage, plan } = metrics;
+    
+    if (percentage >= 90) {
+      return `⚠️ *ALERTA CRÍTICA!*\n\n` +
+             `Has usado *${used} de ${total}* transacciones WhatsApp este mes (${percentage}%)\n` +
+             `📊 Te quedan solo *${remaining} transacciones*\n\n` +
+             (plan === 'free' 
+               ? `🚀 *¡Upgrade a Premium para 300 transacciones!*\n👉 https://tu-dominio.com/upgrade\n\n`
+               : '') +
+             `🔄 Tu límite se resetea el 1ro del próximo mes`;
+    } else {
+      return `⚠️ *Advertencia de Límite*\n\n` +
+             `Has usado *${used} de ${total}* transacciones WhatsApp este mes (${percentage}%)\n` +
+             `📊 Te quedan *${remaining} transacciones*\n\n` +
+             (plan === 'free' 
+               ? `💡 *Tip:* Con Premium tendrías 300 transacciones/mes\n👉 https://tu-dominio.com/upgrade\n\n`
+               : '') +
+             `🔄 Tu límite se resetea el 1ro del próximo mes`;
+    }
+  }
+  
+  private getNextMonthStart(): Date {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 1);
   }
 }
 ```
@@ -485,38 +570,14 @@ serve(async (req) => {
 })
 ```
 
-### **Tarea 5.2: Configuración Dinámica desde Admin**
+### **Tarea 5.2: Configuración Dinámica desde Admin (OMITIDA)**
 **Duración:** 4 horas
 **Prioridad:** 🎯 Media
 
-```typescript
-// Panel para modificar límites en tiempo real
-export function RateLimitConfigPanel() {
-  const [config, setConfig] = useState<RateLimitConfig[]>([]);
-  
-  const updateLimits = async (planType: string, newLimits: any) => {
-    await supabase
-      .from('rate_limit_config')
-      .update(newLimits)
-      .eq('plan_type', planType);
-      
-    // Invalidar cache si existe
-    await invalidateRateLimitCache();
-  };
-  
-  return (
-    <div>
-      {config.map(plan => (
-        <ConfigEditor 
-          key={plan.plan_type}
-          plan={plan}
-          onUpdate={updateLimits}
-        />
-      ))}
-    </div>
-  );
-}
-```
+> **🚫 TAREA OMITIDA TEMPORALMENTE**
+> 
+> Esta tarea requiere un panel de administrador que no está implementado en el proyecto actual.
+> Se implementará en el futuro cuando se desarrolle la infraestructura de admin.
 
 ---
 
@@ -627,12 +688,14 @@ RATE_LIMIT_BATCH_SIZE=100
 |-----|--------|----------|-----------|
 | 1-2 | Base de datos + Servicios core | 10h | 🚨 Crítica |
 | 3-4 | Integración webhook + Middleware | 7h | 🚨 Crítica |  
-| 5-6 | Analytics + Dashboard | 9h | 🎯 Media |
-| 7 | Notificaciones | 7h | 🎯 Media |
-| 8 | Optimización + Edge cases | 10h | 🔧 Baja |
-| 9 | Testing + QA | 7h | 🚨 Crítica |
+| ~~5-6~~ | ~~Analytics + Dashboard~~ | ~~9h~~ | ~~🎯 Media~~ |
+| 5 | Notificaciones | 7h | 🎯 Media |
+| 6 | Optimización + Edge cases | 6h | 🔧 Baja |
+| 7 | Testing + QA | 7h | 🚨 Crítica |
 
-**Total: 50 horas (1.5 semanas)**
+**Total: 37 horas (1 semana)**
+
+> **Nota:** Se omitieron las tareas que requieren panel de administrador (Fase 3 y Tarea 5.2) para implementar posteriormente.
 
 ## ✅ **Checklist de Finalización**
 

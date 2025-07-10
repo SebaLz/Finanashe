@@ -70,7 +70,7 @@ export default function TareasFinancierasPage() {
     amount: '',
     // Datos específicos de la tarea
     due_date: '',
-    status: 'pending' as const,
+    status: 'pending' as 'pending' | 'paid',
     // Datos específicos del gasto fijo
     category_id: '',
     frequency: 'monthly' as 'monthly' | 'weekly' | 'biweekly',
@@ -496,14 +496,14 @@ export default function TareasFinancierasPage() {
               />
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
               >
                 {sortOrder === 'asc' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </Button>
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 onClick={() => setShowCalendar(!showCalendar)}
               >
                 <CalendarIcon size={18} />

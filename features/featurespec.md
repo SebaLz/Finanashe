@@ -1,65 +1,17 @@
-🧠 Spec – Sincronización Inteligente de Categorías (WhatsApp ↔ Supabase)
-🎯 Objetivo principal
-El objetivo de esta feature es asegurar que las transacciones registradas por el bot de WhatsApp, usando OpenAI para interpretar los mensajes, se sincronicen correctamente con las categorías existentes en Supabase, respetando la estética visual (emojis) y manteniendo la coherencia total en la base de datos y la web app.
+# 🔍 **2️⃣ Spec – Funcionalidad a Implementar: Rate Limiting WhatsApp Webhook**
 
-🔍 Funcionalidad a implementar
-1. Validación de usuario
-Verificar que el número o email del usuario exista en Supabase.
+**Objetivo Principal:** Garantizar la seguridad, estabilidad y buen uso del endpoint `/api/whatsapp-webhook`, controlando la frecuencia de uso según el plan del usuario y asegurando una experiencia coherente con toda la plataforma.
 
-Si no existe, no continuar con el flujo.
+1️⃣ El sistema debe limitar peticiones entrantes validando la IP y el ID de usuario proveniente de Supabase.
+2️⃣ El límite de peticiones se ajusta dinámicamente según el plan de usuario:
 
-2. Recepción del mensaje desde WhatsApp + JSON de OpenAI
-Ya existente: se recibe un JSON con los campos:
-
-tipo, fecha, categoría, monto, medio_pago.
-
-3. Validación inteligente de categoría
-Comparar el valor de categoría recibido con las categorías existentes en Supabase.
-
-Implementar fuzzy matching:
-
-Case-insensitive
-
-Permitir errores tipográficos leves (Levenshtein, similaridad, etc.)
-
-Soportar sinónimos simples (opcional)
-
-Si se encuentra coincidencia:
-
-Usar la categoría original desde Supabase (con emoji y formato exacto, ej: "💻 Tecnología").
-
-Si no se encuentra coincidencia:
-
-Usar la categoría "Otros" que ya debe existir en Supabase.
-
-Esta lógica aplica tanto para tipo: ingreso como tipo: gasto.
-
-4. Prevención de duplicados
-Antes de insertar, verificar que no exista ya una transacción idéntica:
-
-Mismo usuario, monto, fecha, tipo y categoría.
-
-5. Guardar transacción en Supabase
-Insertar en la tabla transactions con los siguientes campos:
-
-user_id
-
-tipo
-
-fecha
-
-monto
-
-medio_pago
-
-categoría (con emoji y formato final)
-
-6. Sincronización con frontend
-Como las categorías ya están integradas correctamente en la web, no requiere ajustes en la UI, siempre que el dato insertado mantenga el formato.
-
-✨ Estética como regla fundamental
-Todas las categorías deben guardarse con su emoji, según lo definido en Supabase.
-
-El texto de las transacciones debe ser limpio, legible y coherente visualmente.
-
-Este principio aplica a todos los puntos del flujo: backend, base de datos, frontend y WhatsApp.
+* Plan **Gratuito**: máximo 10 peticiones/día.
+* Plan **Premium**: máximo 300 peticiones/día.
+  3️⃣ Si se excede el límite, se debe bloquear la petición, responder con un mensaje de error claro y registrar la incidencia.
+  4️⃣ Registrar cada intento bloqueado en una tabla `rate_limit_logs` (o equivalente) con: timestamp, IP, ID de usuario, motivo del bloqueo.
+  5️⃣ La solución debe ser extensible para futuros límites (por minuto, hora, etc.).
+  6️⃣ Mantener coherencia con la estructura de base de datos existente en Supabase.
+  7️⃣ Respetar la coherencia visual y los mensajes consistentes en toda la app.
+  8️⃣ Evitar hardcodear valores: usar configuración dinámica para planes y límites.
+  9️⃣ El Spec no impone herramientas: dejar a Cursor proponer la mejor estrategia de implementación (middleware, edge, serverless, etc.).
+  🔟 Verificar compatibilidad con SSR y edge functions si se opta por usarlas.
